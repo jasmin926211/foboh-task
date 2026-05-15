@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdjustmentType {
+  fixed
+  dynamic
+}
+
+enum AdjustmentDirection {
+  increase
+  decrease
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  title       String
+  sku         String   @unique
+  category    String   @default("Wine")
+  subCategory String   @map("sub_category")
+  segment     String
+  brand       String
+  basePrice   Float    @map("base_price")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  profileProducts ProfileProduct[]
+
+  @@map("products")
+}
+
+model PricingProfile {
+  id                  String              @id @default(uuid())
+  name                String
+  customerName        String              @map("customer_name")
+  adjustmentType      AdjustmentType      @map("adjustment_type")
+  adjustmentDirection AdjustmentDirection  @map("adjustment_direction")
+  adjustmentValue     Float               @map("adjustment_value")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  profileProducts ProfileProduct[]
+
+  @@map("pricing_profiles")
+}
+
+model ProfileProduct {
+  id        String         @id @default(uuid())
+  profileId String         @map("profile_id")
+  productId String         @map("product_id")
+
+  profile   PricingProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  product   Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, productId])
+  @@map("profile_products")
+}
