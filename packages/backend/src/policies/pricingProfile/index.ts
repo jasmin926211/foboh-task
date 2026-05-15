@@ -1,11 +1,11 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const createProfilePolicy = {
   body: z.object({
     name: z.string().min(1).max(100),
     customerName: z.string().min(1).max(100),
-    adjustmentType: z.enum(['fixed', 'dynamic']),
-    adjustmentDirection: z.enum(['increase', 'decrease']),
+    adjustmentType: z.enum(["fixed", "dynamic"]),
+    adjustmentDirection: z.enum(["increase", "decrease"]),
     adjustmentValue: z.number().positive(),
     productIds: z.array(z.string().uuid()).min(1),
   }),
@@ -20,8 +20,8 @@ export const updateProfilePolicy = {
   body: z.object({
     name: z.string().min(1).max(100).optional(),
     customerName: z.string().min(1).max(100).optional(),
-    adjustmentType: z.enum(['fixed', 'dynamic']).optional(),
-    adjustmentDirection: z.enum(['increase', 'decrease']).optional(),
+    adjustmentType: z.enum(["fixed", "dynamic"]).optional(),
+    adjustmentDirection: z.enum(["increase", "decrease"]).optional(),
     adjustmentValue: z.number().positive().optional(),
     productIds: z.array(z.string().uuid()).min(1).optional(),
   }),

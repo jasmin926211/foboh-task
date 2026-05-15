@@ -1,14 +1,15 @@
-import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerJsdoc from "swagger-jsdoc";
 
 const options: swaggerJsdoc.Options = {
   definition: {
-    openapi: '3.0.0',
+    openapi: "3.0.0",
     info: {
-      title: 'FOBOH Pricing API',
-      version: '1.0.0',
-      description: 'Customer-specific pricing management for food and beverage suppliers',
+      title: "FOBOH Pricing API",
+      version: "1.0.0",
+      description:
+        "Customer-specific pricing management for food and beverage suppliers",
     },
-    servers: [{ url: '/api' }],
+    servers: [{ url: "/api" }],
   },
   apis: [],
 };

@@ -6,3 +6,4 @@ dist/
 .DS_Store
 .prisma/
 packages/backend/prisma/*.db
+docs
