@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ZodSchema } from 'zod';
+import { ZodSchema, ZodError } from 'zod';
 import { BadRequestException } from '../utilities/exceptions';
 
 interface ValidationSchemas {
@@ -15,17 +15,21 @@ const validateRequest = (schemas: ValidationSchemas) => {
         req.body = schemas.body.parse(req.body);
       }
       if (schemas.query) {
-        req.query = schemas.query.parse(req.query) as any;
+        schemas.query.parse({ ...req.query });
       }
       if (schemas.params) {
-        req.params = schemas.params.parse(req.params) as any;
+        schemas.params.parse({ ...req.params });
       }
       next();
     } catch (error: any) {
-      const message = error.errors
-        ? error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ')
-        : 'Validation failed';
-      next(new BadRequestException(message));
+      if (error instanceof ZodError) {
+        const message = error.issues
+          .map((e) => `${e.path.join('.')}: ${e.message}`)
+          .join(', ');
+        next(new BadRequestException(message));
+      } else {
+        next(new BadRequestException('Validation failed'));
+      }
     }
   };
 };

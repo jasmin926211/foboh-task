@@ -21,7 +21,7 @@ const listProductsController = async (req: Request, res: Response, next: NextFun
 const getProductController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: getProductController');
   try {
-    const product = await productServices.getProduct(req.params.id);
+    const product = await productServices.getProduct(req.params.id as string);
     logger.info('Exit: getProductController — success');
     res.json(product);
   } catch (error) {

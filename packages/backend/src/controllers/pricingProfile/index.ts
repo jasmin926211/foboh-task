@@ -33,7 +33,7 @@ const listProfilesController = async (req: Request, res: Response, next: NextFun
 const getProfileController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: getProfileController');
   try {
-    const profile = await profileServices.getProfile(req.params.id);
+    const profile = await profileServices.getProfile(req.params.id as string);
     logger.info('Exit: getProfileController — success');
     res.json(profile);
   } catch (error) {
@@ -45,7 +45,7 @@ const getProfileController = async (req: Request, res: Response, next: NextFunct
 const updateProfileController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: updateProfileController');
   try {
-    const profile = await profileServices.updateProfile(req.params.id, req.body);
+    const profile = await profileServices.updateProfile(req.params.id as string, req.body);
     logger.info('Exit: updateProfileController — success');
     res.json(profile);
   } catch (error) {
@@ -57,7 +57,7 @@ const updateProfileController = async (req: Request, res: Response, next: NextFu
 const deleteProfileController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: deleteProfileController');
   try {
-    const result = await profileServices.deleteProfile(req.params.id);
+    const result = await profileServices.deleteProfile(req.params.id as string);
     logger.info('Exit: deleteProfileController — success');
     res.json(result);
   } catch (error) {
@@ -69,7 +69,7 @@ const deleteProfileController = async (req: Request, res: Response, next: NextFu
 export const resolvePriceController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: resolvePriceController');
   try {
-    const result = await profileServices.resolvePrice(req.params.id, req.query.customerName as string);
+    const result = await profileServices.resolvePrice(req.params.id as string, req.query.customerName as string);
     logger.info('Exit: resolvePriceController — success');
     res.json(result);
   } catch (error) {
