@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { NAME_MAX_LENGTH } from "../../constants";
 
 export const createCustomerPolicy = {
   body: z.object({
-    name: z.string().min(1).max(100),
+    name: z.string().min(1).max(NAME_MAX_LENGTH),
     email: z.string().email().optional(),
   }),
 };
@@ -14,7 +15,7 @@ export const updateCustomerPolicy = {
     id: z.string().uuid(),
   }),
   body: z.object({
-    name: z.string().min(1).max(100).optional(),
+    name: z.string().min(1).max(NAME_MAX_LENGTH).optional(),
     email: z.string().email().optional().nullable(),
   }),
 };

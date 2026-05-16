@@ -3,8 +3,10 @@ import logger from '../../utilities/logger';
 import { ResourceNotFoundException, NegativePriceException, ConflictException } from '../../utilities/exceptions';
 import computePrice from '../../utilities/computePrice';
 import findOrThrow from '../../utilities/findOrThrow';
+import { roundToTwo } from '../../utilities/roundTo';
+import { computeTier, computeFloorPrice, calculateMarginInsight } from '../../utilities/pricingHelpers';
 import { CreateProfileBody, UpdateProfileBody, PreviewPricesBody } from '../../policies/pricingProfile';
-import { PROFILE_SCOPE, PROFILE_STATUS, ADJUSTMENT_TYPE, PAGINATION, PERCENTAGE_DIVISOR, MARGIN_MULTIPLIER_BASE } from '../../constants';
+import { PROFILE_SCOPE, PROFILE_STATUS, ADJUSTMENT_TYPE, PAGINATION, PERCENTAGE_DIVISOR, TIER_LABELS, EMPTY_MARGIN_INSIGHT } from '../../constants';
 
 // --- Helper: validate that no computed prices are negative ---
 
@@ -318,42 +320,6 @@ export const deleteProfile = async (id: string) => {
   return { message: 'Profile deleted successfully' };
 };
 
-// --- Specificity Tier Labels ---
-
-const TIER_LABELS: Record<number, string> = {
-  1: 'Customer + Selected Products',
-  2: 'Customer + All Products',
-  3: 'Group + Selected Products',
-  4: 'Group + All Products',
-  5: 'All Customers + Selected Products',
-  6: 'All Customers + All Products',
-};
-
-function computeTier(profile: {
-  customerId: string | null;
-  customerGroupId: string | null;
-  scope: string;
-}): number {
-  if (profile.customerId) {
-    return profile.scope === PROFILE_SCOPE.SELECTED ? 1 : 2;
-  }
-  if (profile.customerGroupId) {
-    return profile.scope === PROFILE_SCOPE.SELECTED ? 3 : 4;
-  }
-  // All customers
-  return profile.scope === PROFILE_SCOPE.SELECTED ? 5 : 6;
-}
-
-// --- Empty margin insight (reusable for early returns) ---
-
-const EMPTY_MARGIN_INSIGHT = {
-  triggered: false,
-  winningPrice: 0,
-  sameTierAvgPrice: 0,
-  divergencePercent: 0,
-  message: null as string | null,
-};
-
 // --- Resolve Price (single product) with 6-tier specificity + waterfall ---
 
 export const resolvePrice = async (productId: string, customerId: string) => {
@@ -365,9 +331,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
   }
 
   // Floor protection: clamp to costPrice * (1 + minMarginPercent / 100)
-  const floorPrice = product.costPrice != null && product.minMarginPercent != null
-    ? Math.round(product.costPrice * (MARGIN_MULTIPLIER_BASE + product.minMarginPercent / PERCENTAGE_DIVISOR) * 100) / 100
-    : null;
+  const floorPrice = computeFloorPrice(product.costPrice, product.minMarginPercent);
 
   if (product.deletedAt !== null) {
     return {
@@ -597,38 +561,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
 
   // Compute margin insight
   const sameTierEntries = publishedEntries.filter((e) => e.tier === winner.tier);
-  let marginInsight: {
-    triggered: boolean;
-    winningPrice: number;
-    sameTierAvgPrice: number;
-    divergencePercent: number;
-    message: string | null;
-  };
-
-  if (sameTierEntries.length >= 2) {
-    const avgPrice = sameTierEntries.reduce((sum, e) => sum + e.computedPrice, 0) / sameTierEntries.length;
-    const sameTierAvgPrice = Math.round(avgPrice * 100) / 100;
-    const divergencePercent = Math.round(((finalPrice - sameTierAvgPrice) / sameTierAvgPrice) * 10000) / 100;
-    const triggered = Math.abs(divergencePercent) > 10;
-
-    marginInsight = {
-      triggered,
-      winningPrice: finalPrice,
-      sameTierAvgPrice,
-      divergencePercent,
-      message: triggered
-        ? `Winning price is ${Math.abs(divergencePercent)}% ${divergencePercent < 0 ? 'below' : 'above'} the average of same-tier profiles ($${sameTierAvgPrice.toFixed(2)}). Review floor protection settings.`
-        : null,
-    };
-  } else {
-    marginInsight = {
-      triggered: false,
-      winningPrice: finalPrice,
-      sameTierAvgPrice: finalPrice,
-      divergencePercent: 0,
-      message: null,
-    };
-  }
+  const marginInsight = calculateMarginInsight(sameTierEntries, finalPrice);
 
   const floorNote = floorApplied ? ` Floor applied: price raised from $${winner.computedPrice.toFixed(2)} to $${finalPrice.toFixed(2)}.` : '';
   const reason = `Applied profile '${winner.profileName}' (Tier ${winner.tier} — ${winner.tierLabel}). ${matchingProfiles.length} profile${matchingProfiles.length > 1 ? 's' : ''} matched.${floorNote}`;
@@ -717,7 +650,7 @@ export const previewPrices = async (body: PreviewPricesBody) => {
       sku: product.sku,
       category: product.subCategory,
       basePrice: product.basePrice,
-      adjustment: Math.round(adjustmentAmount * 100) / 100,
+      adjustment: roundToTwo(adjustmentAmount),
       newPrice,
     };
   });

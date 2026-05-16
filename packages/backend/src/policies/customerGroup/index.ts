@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { NAME_MAX_LENGTH, DESCRIPTION_MAX_LENGTH } from "../../constants";
 
 export const createCustomerGroupPolicy = {
   body: z.object({
-    name: z.string().min(1).max(100),
-    description: z.string().max(500).optional(),
+    name: z.string().min(1).max(NAME_MAX_LENGTH),
+    description: z.string().max(DESCRIPTION_MAX_LENGTH).optional(),
   }),
 };
 
@@ -14,8 +15,8 @@ export const updateCustomerGroupPolicy = {
     id: z.string().uuid(),
   }),
   body: z.object({
-    name: z.string().min(1).max(100).optional(),
-    description: z.string().max(500).optional().nullable(),
+    name: z.string().min(1).max(NAME_MAX_LENGTH).optional(),
+    description: z.string().max(DESCRIPTION_MAX_LENGTH).optional().nullable(),
   }),
 };
 

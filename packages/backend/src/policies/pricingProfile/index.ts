@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { NAME_MAX_LENGTH, PAGINATION_MAX_LIMIT } from "../../constants";
 
 export const createProfilePolicy = {
   body: z
     .object({
-      name: z.string().min(1).max(100),
+      name: z.string().min(1).max(NAME_MAX_LENGTH),
       customerId: z.string().uuid().optional(),
       customerGroupId: z.string().uuid().optional(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]),
@@ -48,7 +49,7 @@ export const updateProfilePolicy = {
   }),
   body: z
     .object({
-      name: z.string().min(1).max(100).optional(),
+      name: z.string().min(1).max(NAME_MAX_LENGTH).optional(),
       customerId: z.string().uuid().optional().nullable(),
       customerGroupId: z.string().uuid().optional().nullable(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]).optional(),
@@ -88,7 +89,7 @@ export const listProfilesPolicy = {
     search: z.string().optional(),
     status: z.enum(["draft", "published"]).optional(),
     page: z.coerce.number().int().min(1).default(1),
-    limit: z.coerce.number().int().min(1).max(100).default(10),
+    limit: z.coerce.number().int().min(1).max(PAGINATION_MAX_LIMIT).default(10),
   }),
 };
 

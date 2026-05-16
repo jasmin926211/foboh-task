@@ -1,4 +1,5 @@
 import { PERCENTAGE_DIVISOR } from '../constants';
+import { roundToTwo } from './roundTo';
 
 interface PriceAdjustment {
   adjustmentType: 'fixed' | 'dynamic' | 'custom';
@@ -32,7 +33,7 @@ const computePrice = (basePrice: number, adjustment: PriceAdjustment): number =>
         : basePrice - basePrice * percentage;
   }
 
-  return Math.round(newPrice * 100) / 100;
+  return roundToTwo(newPrice);
 };
 
 export default computePrice;
