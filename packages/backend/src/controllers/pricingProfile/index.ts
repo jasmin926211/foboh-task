@@ -21,9 +21,14 @@ const createProfileController = async (req: Request, res: Response, next: NextFu
 const listProfilesController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: listProfilesController');
   try {
-    const profiles = await profileServices.listProfiles(req.query.customerName as string | undefined);
+    const result = await profileServices.listProfiles(
+      req.query.customerName as string | undefined,
+      req.query.status as 'draft' | 'published' | undefined,
+      Number(req.query.page) || 1,
+      Number(req.query.limit) || 10
+    );
     logger.info('Exit: listProfilesController — success');
-    res.json(profiles);
+    res.json(result);
   } catch (error) {
     logger.error(`Exit: listProfilesController — error: ${error}`);
     next(error);
@@ -69,7 +74,10 @@ const deleteProfileController = async (req: Request, res: Response, next: NextFu
 export const resolvePriceController = async (req: Request, res: Response, next: NextFunction) => {
   logger.info('Entry: resolvePriceController');
   try {
-    const result = await profileServices.resolvePrice(req.params.id as string, req.query.customerName as string);
+    const result = await profileServices.resolvePrice(
+      req.params.id as string,
+      req.query.customerName as string
+    );
     logger.info('Exit: resolvePriceController — success');
     res.json(result);
   } catch (error) {
@@ -78,7 +86,11 @@ export const resolvePriceController = async (req: Request, res: Response, next: 
   }
 };
 
-export const resolveAllPricesController = async (req: Request, res: Response, next: NextFunction) => {
+export const resolveAllPricesController = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   logger.info('Entry: resolveAllPricesController');
   try {
     const results = await profileServices.resolveAllPrices(req.query.customerName as string);
@@ -86,6 +98,18 @@ export const resolveAllPricesController = async (req: Request, res: Response, ne
     res.json(results);
   } catch (error) {
     logger.error(`Exit: resolveAllPricesController — error: ${error}`);
+    next(error);
+  }
+};
+
+export const previewPricesController = async (req: Request, res: Response, next: NextFunction) => {
+  logger.info('Entry: previewPricesController');
+  try {
+    const results = await profileServices.previewPrices(req.body);
+    logger.info('Exit: previewPricesController — success');
+    res.json(results);
+  } catch (error) {
+    logger.error(`Exit: previewPricesController — error: ${error}`);
     next(error);
   }
 };

@@ -10,7 +10,7 @@ export const listProducts = async (filters: {
 }) => {
   logger.info('Entry: listProducts service');
 
-  const where: any = {};
+  const where: any = { deletedAt: null };
 
   if (filters.search) {
     where.OR = [
@@ -39,4 +39,21 @@ export const getProduct = async (id: string) => {
 
   logger.info('Exit: getProduct service — success');
   return product;
+};
+
+export const softDeleteProduct = async (id: string) => {
+  logger.info('Entry: softDeleteProduct service');
+
+  const product = await prisma.product.findUnique({ where: { id } });
+  if (!product) {
+    throw new ResourceNotFoundException(`Product with id ${id} not found`);
+  }
+
+  const updated = await prisma.product.update({
+    where: { id },
+    data: { deletedAt: new Date() },
+  });
+
+  logger.info('Exit: softDeleteProduct service — success');
+  return updated;
 };

@@ -1,12 +1,12 @@
 import { useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
-  ShoppingBag,
+  ShoppingCart,
   Users,
   Package,
   Tag,
   Truck,
-  Plug,
+  Puzzle,
   Settings
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -20,13 +20,13 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-  { label: 'Orders', icon: ShoppingBag, href: '/orders' },
+  { label: 'Orders', icon: ShoppingCart, href: '/orders' },
   { label: 'Customers', icon: Users, href: '/customers' },
   { label: 'Products', icon: Package, href: '/products' },
   { label: 'Pricing', icon: Tag, href: '/pricing' },
   { label: 'Freight', icon: Truck, href: '/freight', tag: 'NEW' },
-  { label: 'Integrations', icon: Plug, href: '/integrations' },
-  { label: 'Settings', icon: Settings, href: '/settings' }
+  { label: 'Integrations', icon: Puzzle, href: '/integrations' },
+  { label: 'Settings', icon: Settings, href: '/settings' },
 ];
 
 export function Sidebar() {

@@ -8,6 +8,7 @@ const errorHandling = (err: any, _req: Request, res: Response, _next: NextFuncti
       error: {
         title: err.title,
         description: err.description,
+        ...(err.products && { products: err.products }),
       },
     });
     return;

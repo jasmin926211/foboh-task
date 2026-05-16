@@ -7,6 +7,7 @@ import { BasicPricingSummary } from '@/components/pricing/BasicPricingSummary';
 import { SetProductPricing } from '@/components/pricing/SetProductPricing';
 import { AssignCustomers } from '@/components/pricing/AssignCustomers';
 import { useProfile, useCreateProfile, useUpdateProfile } from '@/hooks/usePricingProfiles';
+import axios from 'axios';
 
 export function SetupPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,11 +16,13 @@ export function SetupPage() {
 
   // Form state
   const [profileName, setProfileName] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [adjustmentType, setAdjustmentType] = useState<'fixed' | 'dynamic'>('fixed');
+  const [customerNames, setCustomerNames] = useState<string[]>([]);
+  const [adjustmentType, setAdjustmentType] = useState<'fixed' | 'dynamic' | 'custom'>('fixed');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'increase' | 'decrease'>('decrease');
   const [adjustmentValue, setAdjustmentValue] = useState(0);
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [scope, setScope] = useState<'all' | 'selected'>('selected');
+  const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
 
   // Load existing profile for edit mode
   const { data: existingProfile, isLoading: isLoadingProfile } = useProfile(id);
@@ -27,13 +30,23 @@ export function SetupPage() {
   useEffect(() => {
     if (existingProfile) {
       setProfileName(existingProfile.name);
-      setCustomerName(existingProfile.customerName);
+      setCustomerNames([existingProfile.customerName]);
       setAdjustmentType(existingProfile.adjustmentType);
-      setAdjustmentDirection(existingProfile.adjustmentDirection);
-      setAdjustmentValue(existingProfile.adjustmentValue);
+      setAdjustmentDirection(existingProfile.adjustmentDirection ?? 'decrease');
+      setAdjustmentValue(existingProfile.adjustmentValue ?? 0);
+      setScope(existingProfile.scope ?? 'selected');
       setSelectedProductIds(
         new Set(existingProfile.profileProducts?.map((pp: { productId: string }) => pp.productId) ?? [])
       );
+      if (existingProfile.adjustmentType === 'custom') {
+        const prices: Record<string, number> = {};
+        for (const pp of existingProfile.profileProducts ?? []) {
+          if (pp.customPrice != null) {
+            prices[pp.productId] = pp.customPrice;
+          }
+        }
+        setCustomPrices(prices);
+      }
     }
   }, [existingProfile]);
 
@@ -42,54 +55,108 @@ export function SetupPage() {
   const updateMutation = useUpdateProfile();
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (status: 'draft' | 'published') => {
+    const isCustom = adjustmentType === 'custom';
+
     // Validation
     if (!profileName.trim()) {
       toast.error('Please enter a profile name');
       return;
     }
-    if (!customerName.trim()) {
-      toast.error('Please assign a customer');
+    if (customerNames.length === 0) {
+      toast.error('Please assign at least one customer');
       return;
     }
-    if (selectedProductIds.size === 0) {
+    if (scope === 'selected' && selectedProductIds.size === 0) {
       toast.error('Please select at least one product');
       return;
     }
-    if (adjustmentValue <= 0) {
+    if (!isCustom && adjustmentValue <= 0) {
       toast.error('Please enter a positive adjustment value');
       return;
     }
+    if (isCustom) {
+      const missing = Array.from(selectedProductIds).filter((pid) => !(pid in customPrices));
+      if (missing.length > 0) {
+        toast.error('Please enter a custom price for every selected product');
+        return;
+      }
+    }
 
-    const payload = {
-      name: profileName.trim(),
-      customerName: customerName.trim(),
-      adjustmentType,
-      adjustmentDirection,
-      adjustmentValue,
-      productIds: Array.from(selectedProductIds),
-    };
+    const effectiveScope = isCustom ? 'selected' : scope;
 
     try {
       if (isEditMode && id) {
-        await updateMutation.mutateAsync({ id, payload });
+        // Update mode: single customer (edit one profile at a time)
+        const payload: Record<string, unknown> = {
+          name: profileName.trim(),
+          customerName: customerNames[0]?.trim(),
+          adjustmentType,
+          status,
+          scope: effectiveScope,
+          ...(effectiveScope === 'selected' && { productIds: Array.from(selectedProductIds) }),
+        };
+
+        if (isCustom) {
+          payload.customPrices = customPrices;
+        } else {
+          payload.adjustmentDirection = adjustmentDirection;
+          payload.adjustmentValue = adjustmentValue;
+        }
+
+        await updateMutation.mutateAsync({ id, payload: payload as any });
         toast.success('Profile updated successfully');
       } else {
-        await createMutation.mutateAsync(payload);
-        toast.success('Profile created successfully');
+        // Create mode: one profile per customer
+        const payload: Record<string, unknown> = {
+          name: profileName.trim(),
+          customerNames: customerNames.map((n) => n.trim()),
+          adjustmentType,
+          status,
+          scope: effectiveScope,
+          ...(effectiveScope === 'selected' && { productIds: Array.from(selectedProductIds) }),
+        };
+
+        if (isCustom) {
+          payload.customPrices = customPrices;
+        } else {
+          payload.adjustmentDirection = adjustmentDirection;
+          payload.adjustmentValue = adjustmentValue;
+        }
+
+        await createMutation.mutateAsync(payload as any);
+        const count = customerNames.length;
+        toast.success(
+          status === 'draft'
+            ? `${count} profile${count > 1 ? 's' : ''} saved as draft`
+            : `${count} profile${count > 1 ? 's' : ''} published successfully`
+        );
       }
-      navigate('/profiles');
+      navigate('/pricing/profiles');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong';
-      toast.error(message);
+      if (axios.isAxiosError(err) && err.response?.status === 422) {
+        const errorData = err.response.data?.error;
+        const products = errorData?.products;
+        if (products && Array.isArray(products)) {
+          const names = products.map((p: { productTitle: string }) => p.productTitle).join(', ');
+          toast.error(`Negative prices detected for: ${names}`);
+        } else {
+          toast.error(errorData?.description || 'Validation error');
+        }
+      } else {
+        const message = err instanceof Error ? err.message : 'Something went wrong';
+        toast.error(message);
+      }
     }
   }, [
     profileName,
-    customerName,
+    customerNames,
     selectedProductIds,
     adjustmentType,
     adjustmentDirection,
     adjustmentValue,
+    scope,
+    customPrices,
     isEditMode,
     id,
     createMutation,
@@ -111,7 +178,6 @@ export function SetupPage() {
       {/* Header row */}
       <div className="flex items-start justify-between">
         <div>
-          {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-500">Pricing Profile</span>
             <ChevronRight className="h-3.5 w-3.5 text-ink-400" />
@@ -127,11 +193,11 @@ export function SetupPage() {
         <div className="flex items-center gap-4">
           <button
             className="text-sm font-medium text-ink-700 hover:text-ink-900"
-            onClick={() => navigate('/profiles')}
+            onClick={() => navigate('/pricing/profiles')}
           >
             Cancel
           </button>
-          <PillButton variant="secondary" onClick={handleSave} disabled={isSaving}>
+          <PillButton variant="secondary" onClick={() => handleSave('draft')} disabled={isSaving}>
             {isSaving ? 'Saving...' : 'Save as Draft'}
           </PillButton>
         </div>
@@ -154,10 +220,14 @@ export function SetupPage() {
           onAdjustmentDirectionChange={setAdjustmentDirection}
           adjustmentValue={adjustmentValue}
           onAdjustmentValueChange={setAdjustmentValue}
+          scope={scope}
+          onScopeChange={setScope}
+          customPrices={customPrices}
+          onCustomPricesChange={setCustomPrices}
         />
         <AssignCustomers
-          customerName={customerName}
-          onCustomerNameChange={setCustomerName}
+          customerNames={customerNames}
+          onCustomerNamesChange={setCustomerNames}
         />
       </div>
 
@@ -171,7 +241,7 @@ export function SetupPage() {
           >
             Back
           </button>
-          <PillButton variant="primary" className="px-6" onClick={handleSave} disabled={isSaving}>
+          <PillButton variant="primary" className="px-6" onClick={() => handleSave('published')} disabled={isSaving}>
             {isSaving ? 'Saving...' : `Save & ${isEditMode ? 'Update' : 'Publish'} Profile`}
           </PillButton>
         </div>
