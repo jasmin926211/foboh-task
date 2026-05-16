@@ -10,10 +10,10 @@ import {
 import type { UpdateProfilePayload } from '@/api/pricingProfiles';
 import type { CreateProfilePayload, PreviewPricesPayload } from '@/types';
 
-export function useProfiles(customerName?: string, status?: 'draft' | 'published', page: number = 1, limit: number = 10) {
+export function useProfiles(search?: string, status?: 'draft' | 'published', page: number = 1, limit: number = 10) {
   return useQuery({
-    queryKey: ['profiles', customerName, status, page, limit],
-    queryFn: () => fetchProfiles(customerName, status, page, limit),
+    queryKey: ['profiles', search, status, page, limit],
+    queryFn: () => fetchProfiles(search, status, page, limit),
     placeholderData: (prev) => prev,
   });
 }

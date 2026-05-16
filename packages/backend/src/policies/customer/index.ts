@@ -1,0 +1,40 @@
+import { z } from "zod";
+
+export const createCustomerPolicy = {
+  body: z.object({
+    name: z.string().min(1).max(100),
+    email: z.string().email().optional(),
+  }),
+};
+
+export type CreateCustomerBody = z.infer<typeof createCustomerPolicy.body>;
+
+export const updateCustomerPolicy = {
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  body: z.object({
+    name: z.string().min(1).max(100).optional(),
+    email: z.string().email().optional().nullable(),
+  }),
+};
+
+export type UpdateCustomerBody = z.infer<typeof updateCustomerPolicy.body>;
+
+export const getCustomerPolicy = {
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+};
+
+export const deleteCustomerPolicy = {
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+};
+
+export const listCustomersPolicy = {
+  query: z.object({
+    search: z.string().optional(),
+  }),
+};

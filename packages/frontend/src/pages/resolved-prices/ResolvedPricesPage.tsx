@@ -1,28 +1,32 @@
 import { useState } from 'react';
-import { Search, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchResolvedPrices } from '@/api/pricingProfiles';
-import { TextInput } from '@/components/pricing/TextInput';
+import { useCustomers } from '@/hooks/useCustomers';
 import { PillButton } from '@/components/pricing/PillButton';
 import type { ResolvedPrice } from '@/types';
 
 export function ResolvedPricesPage() {
-  const [customerInput, setCustomerInput] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [resolvedCustomerId, setResolvedCustomerId] = useState('');
   const [expandedProductId, setExpandedProductId] = useState<string | null>(null);
 
+  const { data: customers = [] } = useCustomers();
+
   const { data: prices = [], isLoading, isError, isFetched } = useQuery({
-    queryKey: ['resolved-prices', customerName],
-    queryFn: () => fetchResolvedPrices(customerName),
-    enabled: !!customerName
+    queryKey: ['resolved-prices', resolvedCustomerId],
+    queryFn: () => fetchResolvedPrices(resolvedCustomerId),
+    enabled: !!resolvedCustomerId,
   });
 
-  const handleSearch = () => {
-    if (customerInput.trim()) {
-      setCustomerName(customerInput.trim());
+  const handleResolve = () => {
+    if (selectedCustomerId) {
+      setResolvedCustomerId(selectedCustomerId);
       setExpandedProductId(null);
     }
   };
+
+  const selectedCustomerName = customers.find((c) => c.id === resolvedCustomerId)?.name;
 
   return (
     <div className="rounded-card bg-surface-panel p-8">
@@ -34,33 +38,37 @@ export function ResolvedPricesPage() {
         </p>
       </div>
 
-      {/* Customer search */}
+      {/* Customer selection */}
       <div className="mb-6 flex items-end gap-3">
         <div className="max-w-sm flex-1">
-          <label className="mb-2 block text-[13px] font-medium text-ink-700">Customer Name</label>
-          <TextInput
-            placeholder="Enter customer name..."
-            value={customerInput}
-            onChange={setCustomerInput}
-            iconLeft={<Search className="h-4 w-4" />}
-          />
+          <label className="mb-2 block text-[13px] font-medium text-ink-700">Customer</label>
+          <select
+            value={selectedCustomerId}
+            onChange={(e) => setSelectedCustomerId(e.target.value)}
+            className="w-full h-11 rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+          >
+            <option value="">Select a customer...</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
         </div>
-        <PillButton variant="primary" onClick={handleSearch} disabled={!customerInput.trim()}>
+        <PillButton variant="primary" onClick={handleResolve} disabled={!selectedCustomerId}>
           Resolve Prices
         </PillButton>
       </div>
 
       {/* Results */}
-      {!customerName && !isFetched && (
+      {!resolvedCustomerId && !isFetched && (
         <div className="rounded-card border border-surface-border-soft bg-white px-6 py-16 text-center text-sm text-ink-500">
-          Enter a customer name to see their resolved prices.
+          Select a customer to see their resolved prices.
         </div>
       )}
 
-      {customerName && (
+      {resolvedCustomerId && (
         <>
           <p className="mb-4 text-[13px] text-ink-500">
-            Resolved prices for <span className="font-semibold text-ink-900">{customerName}</span>
+            Resolved prices for <span className="font-semibold text-ink-900">{selectedCustomerName}</span>
             {' — '}
             <span className="font-semibold text-ink-900">{prices.length}</span> products
           </p>
@@ -89,6 +97,7 @@ export function ResolvedPricesPage() {
                     <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">New Price</th>
                     <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">Difference</th>
                     <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Applied Profile</th>
+                    <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Tier</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -138,11 +147,29 @@ export function ResolvedPricesPage() {
                               <span className="text-ink-400">No profile applied</span>
                             )}
                           </td>
+                          <td className="px-6 py-4 text-sm">
+                            {price.tier ? (
+                              <span className="rounded-pill bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+                                Tier {price.tier}
+                              </span>
+                            ) : (
+                              <span className="text-ink-400">&mdash;</span>
+                            )}
+                          </td>
                         </tr>
                         {/* Expanded detail row */}
                         {isExpanded && hasProfile && (
-                          <tr key={`${price.productId}-detail`} className="border-b border-surface-border-soft bg-gray-50">
-                            <td colSpan={6} className="px-10 py-4">
+                          <tr className="border-b border-surface-border-soft bg-gray-50">
+                            <td colSpan={7} className="px-10 py-4">
+                              {/* Tier info */}
+                              {price.tierLabel && (
+                                <p className="mb-2 text-[13px]">
+                                  <span className="rounded-pill bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                                    Tier {price.tier} — {price.tierLabel}
+                                  </span>
+                                </p>
+                              )}
+
                               {/* Reason */}
                               <p className="text-[13px] text-ink-700">
                                 <span className="font-medium">Reason:</span> {price.reason}
@@ -156,10 +183,16 @@ export function ResolvedPricesPage() {
                                     {price.candidateProfiles.map((cp) => (
                                       <div key={cp.id} className="flex items-center gap-4 text-[13px] text-ink-700">
                                         <span className="font-medium">{cp.name}</span>
-                                        <span className="text-ink-500">
-                                          {cp.adjustment.direction === 'increase' ? '+' : '-'}
-                                          {cp.adjustment.type === 'dynamic' ? `${cp.adjustment.value}%` : `$${cp.adjustment.value.toFixed(2)}`}
+                                        <span className="rounded-pill bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
+                                          T{cp.tier}
                                         </span>
+                                        <span className="text-ink-500">{cp.customerName}</span>
+                                        {cp.adjustment.direction && cp.adjustment.value != null && (
+                                          <span className="text-ink-500">
+                                            {cp.adjustment.direction === 'increase' ? '+' : '-'}
+                                            {cp.adjustment.type === 'dynamic' ? `${cp.adjustment.value}%` : `$${cp.adjustment.value.toFixed(2)}`}
+                                          </span>
+                                        )}
                                         <span className="font-semibold">${cp.computedPrice.toFixed(2)}</span>
                                         <span className="text-ink-400">
                                           scope: {cp.scope} | updated: {new Date(cp.updatedAt).toLocaleDateString()}

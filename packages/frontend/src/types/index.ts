@@ -12,10 +12,40 @@ export interface Product {
   updatedAt: string;
 }
 
+export interface Customer {
+  id: string;
+  name: string;
+  email?: string | null;
+  memberships?: CustomerGroupMembership[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerGroup {
+  id: string;
+  name: string;
+  description?: string | null;
+  memberships?: CustomerGroupMembership[];
+  _count?: { memberships: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CustomerGroupMembership {
+  id: string;
+  customerId: string;
+  customerGroupId: string;
+  customer?: Customer;
+  customerGroup?: CustomerGroup;
+}
+
 export interface PricingProfile {
   id: string;
   name: string;
-  customerName: string;
+  customerId?: string | null;
+  customerGroupId?: string | null;
+  customer?: Customer | null;
+  customerGroup?: CustomerGroup | null;
   adjustmentType: 'fixed' | 'dynamic' | 'custom';
   adjustmentDirection?: 'increase' | 'decrease' | null;
   adjustmentValue?: number | null;
@@ -48,14 +78,19 @@ export interface ResolvedPrice {
   basePrice: number;
   newPrice: number;
   appliedProfile: { id: string; name: string } | null;
+  tier: number | null;
+  tierLabel: string | null;
   reason: string;
   candidateProfiles: {
     id: string;
     name: string;
-    adjustment: { type: string; direction: string; value: number };
+    customerName: string;
+    adjustment: { type: string; direction: string | null; value: number | null };
     computedPrice: number;
     updatedAt: string;
     scope: string;
+    tier: number;
+    tierLabel: string;
   }[];
   rejectedProfiles: {
     id: string;
@@ -66,7 +101,8 @@ export interface ResolvedPrice {
 
 export interface CreateProfilePayload {
   name: string;
-  customerNames: string[];
+  customerId?: string;
+  customerGroupId?: string;
   adjustmentType: 'fixed' | 'dynamic' | 'custom';
   adjustmentDirection?: 'increase' | 'decrease';
   adjustmentValue?: number;

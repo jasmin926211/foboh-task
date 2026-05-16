@@ -16,16 +16,16 @@ const PAGE_SIZE = 10;
 export function ProfilesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [customerFilter, setCustomerFilter] = useState('');
+  const [searchFilter, setSearchFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'draft' | 'published' | ''>('');
   const [currentPage, setCurrentPage] = useState(1);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const debouncedCustomerFilter = useDebounce(customerFilter, 300);
+  const debouncedSearchFilter = useDebounce(searchFilter, 300);
 
   const { data: result, isLoading, isError } = useProfiles(
-    debouncedCustomerFilter || undefined,
+    debouncedSearchFilter || undefined,
     statusFilter || undefined,
     currentPage,
     PAGE_SIZE,
@@ -85,6 +85,18 @@ export function ProfilesPage() {
     return `${sign}$${value.toFixed(2)}`;
   };
 
+  const getTargetLabel = (profile: PricingProfile) => {
+    if (profile.customer) return profile.customer.name;
+    if (profile.customerGroup) return profile.customerGroup.name;
+    return 'All Customers';
+  };
+
+  const getTargetBadgeClass = (profile: PricingProfile) => {
+    if (profile.customer) return 'bg-blue-50 text-blue-700';
+    if (profile.customerGroup) return 'bg-purple-50 text-purple-700';
+    return 'bg-gray-100 text-ink-600';
+  };
+
   const rangeStart = Math.min((currentPage - 1) * PAGE_SIZE + 1, total);
   const rangeEnd = Math.min(currentPage * PAGE_SIZE, total);
 
@@ -111,9 +123,9 @@ export function ProfilesPage() {
       <div className="mb-6 flex items-end gap-4">
         <div className="max-w-sm flex-1">
           <TextInput
-            placeholder="Filter by customer name..."
-            value={customerFilter}
-            onChange={(val) => { setCustomerFilter(val); setCurrentPage(1); }}
+            placeholder="Search by name, customer, or group..."
+            value={searchFilter}
+            onChange={(val) => { setSearchFilter(val); setCurrentPage(1); }}
           />
         </div>
         <select
@@ -169,7 +181,7 @@ export function ProfilesPage() {
               <tr className="border-b border-surface-border">
                 <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Profile Name</th>
                 <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Status</th>
-                <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Customer</th>
+                <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Target</th>
                 <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Adjustment</th>
                 <th className="px-6 py-3 text-center text-[13px] font-medium text-ink-500">Products</th>
                 <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Updated</th>
@@ -189,7 +201,11 @@ export function ProfilesPage() {
                       {profile.status === 'published' ? 'Published' : 'Draft'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-ink-700">{profile.customerName}</td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex rounded-pill px-2.5 py-1 text-xs font-medium ${getTargetBadgeClass(profile)}`}>
+                      {getTargetLabel(profile)}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center gap-1.5">
                       <span className={`rounded-pill px-2.5 py-1 text-xs font-medium ${

@@ -6,6 +6,7 @@ import { PillButton } from '@/components/pricing/PillButton';
 import { BasicPricingSummary } from '@/components/pricing/BasicPricingSummary';
 import { SetProductPricing } from '@/components/pricing/SetProductPricing';
 import { AssignCustomers } from '@/components/pricing/AssignCustomers';
+import type { TargetType } from '@/components/pricing/AssignCustomers';
 import { useProfile, useCreateProfile, useUpdateProfile } from '@/hooks/usePricingProfiles';
 import axios from 'axios';
 
@@ -16,7 +17,9 @@ export function SetupPage() {
 
   // Form state
   const [profileName, setProfileName] = useState('');
-  const [customerNames, setCustomerNames] = useState<string[]>([]);
+  const [targetType, setTargetType] = useState<TargetType>('all');
+  const [customerId, setCustomerId] = useState<string | undefined>();
+  const [customerGroupId, setCustomerGroupId] = useState<string | undefined>();
   const [adjustmentType, setAdjustmentType] = useState<'fixed' | 'dynamic' | 'custom'>('fixed');
   const [adjustmentDirection, setAdjustmentDirection] = useState<'increase' | 'decrease'>('decrease');
   const [adjustmentValue, setAdjustmentValue] = useState(0);
@@ -30,7 +33,20 @@ export function SetupPage() {
   useEffect(() => {
     if (existingProfile) {
       setProfileName(existingProfile.name);
-      setCustomerNames([existingProfile.customerName]);
+      // Determine target type from profile data
+      if (existingProfile.customerId) {
+        setTargetType('customer');
+        setCustomerId(existingProfile.customerId);
+        setCustomerGroupId(undefined);
+      } else if (existingProfile.customerGroupId) {
+        setTargetType('group');
+        setCustomerGroupId(existingProfile.customerGroupId);
+        setCustomerId(undefined);
+      } else {
+        setTargetType('all');
+        setCustomerId(undefined);
+        setCustomerGroupId(undefined);
+      }
       setAdjustmentType(existingProfile.adjustmentType);
       setAdjustmentDirection(existingProfile.adjustmentDirection ?? 'decrease');
       setAdjustmentValue(existingProfile.adjustmentValue ?? 0);
@@ -63,8 +79,12 @@ export function SetupPage() {
       toast.error('Please enter a profile name');
       return;
     }
-    if (customerNames.length === 0) {
-      toast.error('Please assign at least one customer');
+    if (targetType === 'customer' && !customerId) {
+      toast.error('Please select a customer');
+      return;
+    }
+    if (targetType === 'group' && !customerGroupId) {
+      toast.error('Please select a customer group');
       return;
     }
     if (scope === 'selected' && selectedProductIds.size === 0) {
@@ -86,50 +106,38 @@ export function SetupPage() {
     const effectiveScope = isCustom ? 'selected' : scope;
 
     try {
+      const payload: Record<string, unknown> = {
+        name: profileName.trim(),
+        adjustmentType,
+        status,
+        scope: effectiveScope,
+        ...(effectiveScope === 'selected' && { productIds: Array.from(selectedProductIds) }),
+      };
+
+      // Set targeting
+      if (targetType === 'customer') {
+        payload.customerId = customerId;
+      } else if (targetType === 'group') {
+        payload.customerGroupId = customerGroupId;
+      }
+      // If 'all', both stay undefined/null
+
+      if (isCustom) {
+        payload.customPrices = customPrices;
+      } else {
+        payload.adjustmentDirection = adjustmentDirection;
+        payload.adjustmentValue = adjustmentValue;
+      }
+
       if (isEditMode && id) {
-        // Update mode: single customer (edit one profile at a time)
-        const payload: Record<string, unknown> = {
-          name: profileName.trim(),
-          customerName: customerNames[0]?.trim(),
-          adjustmentType,
-          status,
-          scope: effectiveScope,
-          ...(effectiveScope === 'selected' && { productIds: Array.from(selectedProductIds) }),
-        };
-
-        if (isCustom) {
-          payload.customPrices = customPrices;
-        } else {
-          payload.adjustmentDirection = adjustmentDirection;
-          payload.adjustmentValue = adjustmentValue;
-        }
-
         await updateMutation.mutateAsync({ id, payload: payload as any });
         toast.success('Profile updated successfully');
       } else {
-        // Create mode: one profile per customer
-        const payload: Record<string, unknown> = {
-          name: profileName.trim(),
-          customerNames: customerNames.map((n) => n.trim()),
-          adjustmentType,
-          status,
-          scope: effectiveScope,
-          ...(effectiveScope === 'selected' && { productIds: Array.from(selectedProductIds) }),
-        };
-
-        if (isCustom) {
-          payload.customPrices = customPrices;
-        } else {
-          payload.adjustmentDirection = adjustmentDirection;
-          payload.adjustmentValue = adjustmentValue;
-        }
-
         await createMutation.mutateAsync(payload as any);
-        const count = customerNames.length;
         toast.success(
           status === 'draft'
-            ? `${count} profile${count > 1 ? 's' : ''} saved as draft`
-            : `${count} profile${count > 1 ? 's' : ''} published successfully`
+            ? 'Profile saved as draft'
+            : 'Profile published successfully'
         );
       }
       navigate('/pricing/profiles');
@@ -152,7 +160,9 @@ export function SetupPage() {
     }
   }, [
     profileName,
-    customerNames,
+    targetType,
+    customerId,
+    customerGroupId,
     selectedProductIds,
     adjustmentType,
     adjustmentDirection,
@@ -229,8 +239,12 @@ export function SetupPage() {
           onCustomPricesChange={setCustomPrices}
         />
         <AssignCustomers
-          customerNames={customerNames}
-          onCustomerNamesChange={setCustomerNames}
+          targetType={targetType}
+          onTargetTypeChange={setTargetType}
+          customerId={customerId}
+          onCustomerIdChange={setCustomerId}
+          customerGroupId={customerGroupId}
+          onCustomerGroupIdChange={setCustomerGroupId}
         />
       </div>
 

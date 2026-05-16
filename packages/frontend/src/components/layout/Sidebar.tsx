@@ -3,13 +3,14 @@ import {
   LayoutDashboard,
   ShoppingCart,
   Users,
+  UsersRound,
   Package,
   Tag,
   Truck,
   Puzzle,
   Settings
 } from 'lucide-react';
-import { cn } from '@/lib/cn';
+import { cn } from '@/lib/utils';
 
 interface NavItem {
   label: string;
@@ -22,6 +23,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
   { label: 'Orders', icon: ShoppingCart, href: '/orders' },
   { label: 'Customers', icon: Users, href: '/customers' },
+  { label: 'Customer Groups', icon: UsersRound, href: '/customer-groups' },
   { label: 'Products', icon: Package, href: '/products' },
   { label: 'Pricing', icon: Tag, href: '/pricing' },
   { label: 'Freight', icon: Truck, href: '/freight', tag: 'NEW' },
@@ -41,7 +43,7 @@ export function Sidebar() {
       <nav className="flex-1 mt-4 flex flex-col gap-1 px-3">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname.startsWith(item.href);
+          const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
 
           return (
             <Link

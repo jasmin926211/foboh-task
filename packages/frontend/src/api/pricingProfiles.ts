@@ -1,4 +1,4 @@
-import apiClient from './client';
+import apiClient from '@/lib/client';
 import type { PricingProfile, CreateProfilePayload, ResolvedPrice, PreviewPricesPayload, PreviewPricesResponse } from '../types';
 
 export interface PaginatedProfiles {
@@ -10,13 +10,13 @@ export interface PaginatedProfiles {
 }
 
 export const fetchProfiles = async (
-  customerName?: string,
+  search?: string,
   status?: 'draft' | 'published',
   page: number = 1,
   limit: number = 10,
 ): Promise<PaginatedProfiles> => {
   const params: Record<string, string | number> = { page, limit };
-  if (customerName) params.customerName = customerName;
+  if (search) params.search = search;
   if (status) params.status = status;
   const { data } = await apiClient.get('/pricing-profiles', { params });
   return data;
@@ -34,14 +34,15 @@ export const fetchProfile = async (id: string) => {
   return data;
 };
 
-export const createProfile = async (payload: CreateProfilePayload): Promise<PricingProfile[]> => {
+export const createProfile = async (payload: CreateProfilePayload): Promise<PricingProfile> => {
   const { data } = await apiClient.post('/pricing-profiles', payload);
   return data;
 };
 
 export interface UpdateProfilePayload {
   name?: string;
-  customerName?: string;
+  customerId?: string | null;
+  customerGroupId?: string | null;
   adjustmentType?: 'fixed' | 'dynamic' | 'custom';
   adjustmentDirection?: 'increase' | 'decrease' | null;
   adjustmentValue?: number | null;
@@ -63,14 +64,13 @@ export const deleteProfile = async (id: string): Promise<void> => {
   await apiClient.delete(`/pricing-profiles/${id}`);
 };
 
-export const fetchResolvedPrices = async (customerName: string): Promise<ResolvedPrice[]> => {
-  const { data } = await apiClient.get('/resolved-prices', { params: { customerName } });
+export const fetchResolvedPrices = async (customerId: string): Promise<ResolvedPrice[]> => {
+  const { data } = await apiClient.get('/resolved-prices', { params: { customerId } });
   return data;
 };
 
 export const previewPrices = async (payload: PreviewPricesPayload): Promise<PreviewPricesResponse> => {
   const { data } = await apiClient.post('/preview-prices', payload);
-  // Handle both old format (flat array) and new format ({ results, warnings })
   if (Array.isArray(data)) {
     return { results: data, warnings: [] };
   }

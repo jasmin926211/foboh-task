@@ -4,7 +4,8 @@ export const createProfilePolicy = {
   body: z
     .object({
       name: z.string().min(1).max(100),
-      customerNames: z.array(z.string().min(1).max(100)).min(1),
+      customerId: z.string().uuid().optional(),
+      customerGroupId: z.string().uuid().optional(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]),
       adjustmentDirection: z.enum(["increase", "decrease"]).optional(),
       adjustmentValue: z.number().positive().optional(),
@@ -13,6 +14,10 @@ export const createProfilePolicy = {
       productIds: z.array(z.string().uuid()).optional(),
       customPrices: z.record(z.string().uuid(), z.number().nonnegative()).optional(),
     })
+    .refine(
+      (data) => !(data.customerId && data.customerGroupId),
+      { message: "At most one of customerId or customerGroupId can be set", path: ["customerId"] }
+    )
     .refine(
       (data) => data.scope === "all" || (data.productIds && data.productIds.length > 0),
       { message: "productIds must be non-empty when scope is 'selected'", path: ["productIds"] }
@@ -44,7 +49,8 @@ export const updateProfilePolicy = {
   body: z
     .object({
       name: z.string().min(1).max(100).optional(),
-      customerName: z.string().min(1).max(100).optional(),
+      customerId: z.string().uuid().optional().nullable(),
+      customerGroupId: z.string().uuid().optional().nullable(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]).optional(),
       adjustmentDirection: z.enum(["increase", "decrease"]).optional().nullable(),
       adjustmentValue: z.number().positive().optional().nullable(),
@@ -53,6 +59,10 @@ export const updateProfilePolicy = {
       productIds: z.array(z.string().uuid()).optional(),
       customPrices: z.record(z.string().uuid(), z.number().nonnegative()).optional(),
     })
+    .refine(
+      (data) => !(data.customerId && data.customerGroupId),
+      { message: "At most one of customerId or customerGroupId can be set", path: ["customerId"] }
+    )
     .refine(
       (data) => data.adjustmentType !== "custom" || data.scope !== "all",
       { message: "Custom pricing requires scope 'selected'", path: ["scope"] }
@@ -75,7 +85,7 @@ export const deleteProfilePolicy = {
 
 export const listProfilesPolicy = {
   query: z.object({
-    customerName: z.string().optional(),
+    search: z.string().optional(),
     status: z.enum(["draft", "published"]).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10),
@@ -84,7 +94,7 @@ export const listProfilesPolicy = {
 
 export const resolvedPricesPolicy = {
   query: z.object({
-    customerName: z.string().min(1),
+    customerId: z.string().uuid(),
   }),
 };
 
@@ -93,7 +103,14 @@ export const resolvedPriceByProductPolicy = {
     id: z.string().uuid(),
   }),
   query: z.object({
-    customerName: z.string().min(1),
+    customerId: z.string().uuid(),
+  }),
+};
+
+export const resolvePricePolicy = {
+  query: z.object({
+    customerId: z.string().uuid(),
+    productId: z.string().uuid(),
   }),
 };
 

@@ -22,7 +22,7 @@ const listProfilesController = async (req: Request, res: Response, next: NextFun
   logger.info('Entry: listProfilesController');
   try {
     const result = await profileServices.listProfiles(
-      req.query.customerName as string | undefined,
+      req.query.search as string | undefined,
       req.query.status as 'draft' | 'published' | undefined,
       Number(req.query.page) || 1,
       Number(req.query.limit) || 10
@@ -76,7 +76,7 @@ export const resolvePriceController = async (req: Request, res: Response, next: 
   try {
     const result = await profileServices.resolvePrice(
       req.params.id as string,
-      req.query.customerName as string
+      req.query.customerId as string
     );
     logger.info('Exit: resolvePriceController — success');
     res.json(result);
@@ -93,11 +93,26 @@ export const resolveAllPricesController = async (
 ) => {
   logger.info('Entry: resolveAllPricesController');
   try {
-    const results = await profileServices.resolveAllPrices(req.query.customerName as string);
+    const results = await profileServices.resolveAllPrices(req.query.customerId as string);
     logger.info('Exit: resolveAllPricesController — success');
     res.json(results);
   } catch (error) {
     logger.error(`Exit: resolveAllPricesController — error: ${error}`);
+    next(error);
+  }
+};
+
+export const resolveSinglePriceController = async (req: Request, res: Response, next: NextFunction) => {
+  logger.info('Entry: resolveSinglePriceController');
+  try {
+    const result = await profileServices.resolvePrice(
+      req.query.productId as string,
+      req.query.customerId as string
+    );
+    logger.info('Exit: resolveSinglePriceController — success');
+    res.json(result);
+  } catch (error) {
+    logger.error(`Exit: resolveSinglePriceController — error: ${error}`);
     next(error);
   }
 };

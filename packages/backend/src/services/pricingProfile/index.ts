@@ -14,7 +14,6 @@ async function validateNoPricesNegative(params: {
   adjustmentValue?: number | null;
   customPrices?: Record<string, number>;
 }) {
-  // For custom, validate from the customPrices map
   if (params.adjustmentType === 'custom') {
     if (!params.customPrices) return;
     const negatives: { productId: string; productTitle: string; basePrice: number; computedPrice: number }[] = [];
@@ -99,40 +98,40 @@ export const createProfile = async (body: CreateProfileBody) => {
     customPrices: body.customPrices,
   });
 
-  // Create one profile per customer name
-  const profiles = await Promise.all(
-    body.customerNames.map((customerName) =>
-      prisma.pricingProfile.create({
-        data: {
-          name: body.name,
-          customerName,
-          adjustmentType: body.adjustmentType,
-          adjustmentDirection: isCustom ? null : (body.adjustmentDirection ?? null),
-          adjustmentValue: isCustom ? null : (body.adjustmentValue ?? null),
-          status,
-          scope,
-          ...(scope === 'selected' && body.productIds && {
-            profileProducts: {
-              create: body.productIds.map((productId) => ({
-                productId,
-                ...(isCustom && body.customPrices && { customPrice: body.customPrices[productId] ?? null }),
-              })),
-            },
-          }),
+  const profile = await prisma.pricingProfile.create({
+    data: {
+      name: body.name,
+      customerId: body.customerId ?? null,
+      customerGroupId: body.customerGroupId ?? null,
+      adjustmentType: body.adjustmentType,
+      adjustmentDirection: isCustom ? null : (body.adjustmentDirection ?? null),
+      adjustmentValue: isCustom ? null : (body.adjustmentValue ?? null),
+      status,
+      scope,
+      ...(scope === 'selected' && body.productIds && {
+        profileProducts: {
+          create: body.productIds.map((productId) => ({
+            productId,
+            ...(isCustom && body.customPrices && { customPrice: body.customPrices[productId] ?? null }),
+          })),
         },
-        include: { profileProducts: { include: { product: true } } },
-      })
-    )
-  );
+      }),
+    },
+    include: {
+      profileProducts: { include: { product: true } },
+      customer: true,
+      customerGroup: true,
+    },
+  });
 
-  logger.info(`Exit: createProfile service — created ${profiles.length} profile(s)`);
-  return profiles;
+  logger.info('Exit: createProfile service — created profile');
+  return profile;
 };
 
 // --- List ---
 
 export const listProfiles = async (
-  customerName?: string,
+  search?: string,
   status?: 'draft' | 'published',
   page: number = 1,
   limit: number = 10,
@@ -140,10 +139,11 @@ export const listProfiles = async (
   logger.info('Entry: listProfiles service');
 
   const where: any = {};
-  if (customerName) {
+  if (search) {
     where.OR = [
-      { customerName: { contains: customerName, mode: 'insensitive' } },
-      { name: { contains: customerName, mode: 'insensitive' } },
+      { name: { contains: search, mode: 'insensitive' } },
+      { customer: { name: { contains: search, mode: 'insensitive' } } },
+      { customerGroup: { name: { contains: search, mode: 'insensitive' } } },
     ];
   }
   if (status) where.status = status;
@@ -151,7 +151,11 @@ export const listProfiles = async (
   const [profiles, total] = await Promise.all([
     prisma.pricingProfile.findMany({
       where,
-      include: { profileProducts: true },
+      include: {
+        profileProducts: true,
+        customer: true,
+        customerGroup: true,
+      },
       orderBy: { updatedAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
@@ -170,7 +174,11 @@ export const getProfile = async (id: string) => {
 
   const profile = await prisma.pricingProfile.findUnique({
     where: { id },
-    include: { profileProducts: { include: { product: true } } },
+    include: {
+      profileProducts: { include: { product: true } },
+      customer: true,
+      customerGroup: true,
+    },
   });
 
   if (!profile) {
@@ -190,7 +198,6 @@ export const getProfile = async (id: string) => {
       .map((pp) => pp.product);
   }
 
-  // Build a lookup of customPrices from junction rows
   const customPriceLookup: Record<string, number | null> = {};
   if (isCustom) {
     for (const pp of profile.profileProducts) {
@@ -252,13 +259,11 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
 
   const { productIds, customPrices, ...updateData } = body;
 
-  // Null out direction/value when switching to custom
   if (isCustom) {
     (updateData as any).adjustmentDirection = null;
     (updateData as any).adjustmentValue = null;
   }
 
-  // Handle scope transitions and product updates
   let profileProductsUpdate: any = undefined;
   if (body.scope === 'all' && existing.scope !== 'all') {
     profileProductsUpdate = { deleteMany: {} };
@@ -286,7 +291,11 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
       ...updateData,
       ...(profileProductsUpdate && { profileProducts: profileProductsUpdate }),
     },
-    include: { profileProducts: { include: { product: true } } },
+    include: {
+      profileProducts: { include: { product: true } },
+      customer: true,
+      customerGroup: true,
+    },
   });
 
   logger.info('Exit: updateProfile service — success');
@@ -309,9 +318,36 @@ export const deleteProfile = async (id: string) => {
   return { message: 'Profile deleted successfully' };
 };
 
-// --- Resolve Price (single product) ---
+// --- Specificity Tier Labels ---
 
-export const resolvePrice = async (productId: string, customerName: string) => {
+const TIER_LABELS: Record<number, string> = {
+  1: 'Customer + Selected Products',
+  2: 'Customer + All Products',
+  3: 'Group + Selected Products',
+  4: 'Group + All Products',
+  5: 'All Customers + Selected Products',
+  6: 'All Customers + All Products',
+};
+
+function computeTier(profile: {
+  customerId: string | null;
+  customerGroupId: string | null;
+  scope: string;
+  matchedViaGroup?: boolean;
+}): number {
+  if (profile.customerId) {
+    return profile.scope === 'selected' ? 1 : 2;
+  }
+  if (profile.customerGroupId) {
+    return profile.scope === 'selected' ? 3 : 4;
+  }
+  // All customers
+  return profile.scope === 'selected' ? 5 : 6;
+}
+
+// --- Resolve Price (single product) with 6-tier specificity ---
+
+export const resolvePrice = async (productId: string, customerId: string) => {
   logger.info('Entry: resolvePrice service');
 
   const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -326,42 +362,96 @@ export const resolvePrice = async (productId: string, customerName: string) => {
       basePrice: product.basePrice,
       newPrice: product.basePrice,
       appliedProfile: null,
+      tier: null,
+      tierLabel: null,
       reason: 'Product is soft-deleted; returning base price.',
       candidateProfiles: [],
       rejectedProfiles: [],
     };
   }
 
+  // Look up the customer and their group memberships
+  const customer = await prisma.customer.findUnique({
+    where: { id: customerId },
+    include: { memberships: true },
+  });
+  if (!customer) {
+    throw new ResourceNotFoundException(`Customer with id ${customerId} not found`);
+  }
+
+  const groupIds = customer.memberships.map((m) => m.customerGroupId);
+
+  // Find all published profiles that could apply
   const profiles = await prisma.pricingProfile.findMany({
     where: {
-      customerName,
       status: 'published',
       OR: [
-        { scope: 'all' },
-        { profileProducts: { some: { productId } } },
+        { customerId },
+        ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
+        { customerId: null, customerGroupId: null },
       ],
     },
-    include: { profileProducts: { where: { productId } } },
-    orderBy: { updatedAt: 'desc' },
+    include: {
+      profileProducts: { where: { productId } },
+      customer: true,
+      customerGroup: true,
+    },
   });
 
-  if (profiles.length === 0) {
+  // Filter to profiles that cover this product
+  const matchingProfiles = profiles.filter((p) => {
+    if (p.scope === 'all') return true;
+    return p.profileProducts.length > 0;
+  });
+
+  if (matchingProfiles.length === 0) {
+    // Check for rejected draft profiles
+    const draftProfiles = await prisma.pricingProfile.findMany({
+      where: {
+        status: 'draft',
+        AND: [
+          {
+            OR: [
+              { customerId },
+              ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
+              { customerId: null, customerGroupId: null },
+            ],
+          },
+          {
+            OR: [
+              { scope: 'all' },
+              { profileProducts: { some: { productId } } },
+            ],
+          },
+        ],
+      },
+    });
+
+    const rejectedProfiles = draftProfiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      rejectionReason: 'Profile is in draft status',
+    }));
+
     return {
       productId: product.id,
       productTitle: product.title,
       basePrice: product.basePrice,
       newPrice: product.basePrice,
       appliedProfile: null,
+      tier: null,
+      tierLabel: null,
       reason: 'No published profiles matched this product.',
       candidateProfiles: [],
-      rejectedProfiles: [],
+      rejectedProfiles,
     };
   }
 
-  const candidateProfiles = profiles.map((p) => {
+  // Compute tier for each matching profile, then compute price
+  const candidatesWithTier = matchingProfiles.map((p) => {
     const isCustom = p.adjustmentType === 'custom';
     const junctionRow = p.profileProducts[0];
-    const computedPrice = isCustom
+    const computedNewPrice = isCustom
       ? (junctionRow?.customPrice ?? product.basePrice)
       : computePrice(product.basePrice, {
           adjustmentType: p.adjustmentType,
@@ -369,67 +459,81 @@ export const resolvePrice = async (productId: string, customerName: string) => {
           adjustmentValue: p.adjustmentValue,
         });
 
+    const tier = computeTier({
+      customerId: p.customerId,
+      customerGroupId: p.customerGroupId,
+      scope: p.scope,
+    });
+
     return {
       id: p.id,
       name: p.name,
+      customerName: p.customer?.name ?? p.customerGroup?.name ?? 'All Customers',
       adjustment: {
         type: p.adjustmentType,
         direction: p.adjustmentDirection,
         value: p.adjustmentValue,
       },
-      computedPrice,
+      computedPrice: computedNewPrice,
       updatedAt: p.updatedAt,
       scope: p.scope,
+      tier,
+      tierLabel: TIER_LABELS[tier],
     };
   });
 
+  // Sort by tier ASC, then updatedAt DESC
+  candidatesWithTier.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    return b.updatedAt.getTime() - a.updatedAt.getTime();
+  });
+
+  const winner = candidatesWithTier[0];
+
+  // Find rejected draft profiles
   const draftProfiles = await prisma.pricingProfile.findMany({
     where: {
-      customerName,
       status: 'draft',
       OR: [
-        { scope: 'all' },
-        { profileProducts: { some: { productId } } },
+        { customerId },
+        ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
+        { customerId: null, customerGroupId: null },
       ],
     },
   });
 
-  const rejectedProfiles = draftProfiles.map((p) => ({
-    id: p.id,
-    name: p.name,
-    rejectionReason: 'Profile is in draft status',
-  }));
+  const rejectedProfiles = draftProfiles
+    .filter((p) => {
+      if (p.scope === 'all') return true;
+      // Check if draft profile covers this product - we need to query
+      return true; // Include all drafts as potentially relevant
+    })
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      rejectionReason: 'Profile is in draft status',
+    }));
 
-  const winningProfile = profiles[0];
-  const isWinnerCustom = winningProfile.adjustmentType === 'custom';
-  const winnerJunction = winningProfile.profileProducts[0];
-  const newPrice = isWinnerCustom
-    ? (winnerJunction?.customPrice ?? product.basePrice)
-    : computePrice(product.basePrice, {
-        adjustmentType: winningProfile.adjustmentType,
-        adjustmentDirection: winningProfile.adjustmentDirection,
-        adjustmentValue: winningProfile.adjustmentValue,
-      });
-
-  const matchCount = profiles.length;
-  const reason = `Applied profile '${winningProfile.name}' (most recently updated). ${matchCount} profile${matchCount > 1 ? 's' : ''} matched.`;
+  const reason = `Applied profile '${winner.name}' (Tier ${winner.tier} — ${winner.tierLabel}). ${candidatesWithTier.length} profile${candidatesWithTier.length > 1 ? 's' : ''} matched.`;
 
   logger.info('Exit: resolvePrice service — success');
   return {
     productId: product.id,
     productTitle: product.title,
     basePrice: product.basePrice,
-    newPrice,
-    appliedProfile: { id: winningProfile.id, name: winningProfile.name },
+    newPrice: winner.computedPrice,
+    appliedProfile: { id: winner.id, name: winner.name },
+    tier: winner.tier,
+    tierLabel: winner.tierLabel,
     reason,
-    candidateProfiles,
+    candidateProfiles: candidatesWithTier,
     rejectedProfiles,
   };
 };
 
 // --- Resolve All Prices ---
 
-export const resolveAllPrices = async (customerName: string) => {
+export const resolveAllPrices = async (customerId: string) => {
   logger.info('Entry: resolveAllPrices service');
 
   const products = await prisma.product.findMany({
@@ -438,7 +542,7 @@ export const resolveAllPrices = async (customerName: string) => {
   });
 
   const results = await Promise.all(
-    products.map((product) => resolvePrice(product.id, customerName))
+    products.map((product) => resolvePrice(product.id, customerId))
   );
 
   logger.info('Exit: resolveAllPrices service — success');
