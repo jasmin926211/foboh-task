@@ -1,6 +1,6 @@
 import prisma from '../../prisma/client';
 import logger from '../../utilities/logger';
-import { ResourceNotFoundException, NegativePriceException } from '../../utilities/exceptions';
+import { ResourceNotFoundException, NegativePriceException, ConflictException } from '../../utilities/exceptions';
 import computePrice from '../../utilities/computePrice';
 import { CreateProfileBody, UpdateProfileBody, PreviewPricesBody } from '../../policies/pricingProfile';
 
@@ -64,6 +64,15 @@ async function validateNoPricesNegative(params: {
   }
 }
 
+// --- Check Name ---
+
+export const checkProfileNameExists = async (name: string, excludeId?: string): Promise<boolean> => {
+  const where: any = { name: { equals: name, mode: 'insensitive' } };
+  if (excludeId) where.id = { not: excludeId };
+  const count = await prisma.pricingProfile.count({ where });
+  return count > 0;
+};
+
 // --- Create ---
 
 export const createProfile = async (body: CreateProfileBody) => {
@@ -72,6 +81,14 @@ export const createProfile = async (body: CreateProfileBody) => {
   const scope = body.scope ?? 'selected';
   const status = body.status ?? 'draft';
   const isCustom = body.adjustmentType === 'custom';
+
+  // Check for duplicate profile name
+  const existing = await prisma.pricingProfile.findFirst({
+    where: { name: { equals: body.name, mode: 'insensitive' } },
+  });
+  if (existing) {
+    throw new ConflictException(`A pricing profile named "${body.name}" already exists`);
+  }
 
   await validateNoPricesNegative({
     scope,

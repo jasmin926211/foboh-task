@@ -114,10 +114,25 @@ export const previewPricesController = async (req: Request, res: Response, next:
   }
 };
 
+const checkNameController = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const name = req.query.name as string;
+    const excludeId = req.query.excludeId as string | undefined;
+    const exists = await profileServices.checkProfileNameExists(name, excludeId);
+    res.json({ exists });
+  } catch (error) {
+    next(error);
+  }
+};
+
 router
   .route('/')
   .post(validateRequest(policies.createProfilePolicy), createProfileController)
   .get(validateRequest(policies.listProfilesPolicy), listProfilesController);
+
+router
+  .route('/check-name')
+  .get(checkNameController);
 
 router
   .route('/:id')

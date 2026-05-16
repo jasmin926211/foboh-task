@@ -134,7 +134,9 @@ export function SetupPage() {
       }
       navigate('/pricing/profiles');
     } catch (err: unknown) {
-      if (axios.isAxiosError(err) && err.response?.status === 422) {
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
+        toast.error(err.response.data?.error?.description || 'A profile with this name already exists');
+      } else if (axios.isAxiosError(err) && err.response?.status === 422) {
         const errorData = err.response.data?.error;
         const products = errorData?.products;
         if (products && Array.isArray(products)) {
@@ -209,6 +211,7 @@ export function SetupPage() {
           name={profileName}
           onNameChange={setProfileName}
           isEditMode={isEditMode}
+          profileId={id}
         />
         <SetProductPricing
           profileName={profileName}

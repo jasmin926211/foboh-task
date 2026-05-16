@@ -1,17 +1,23 @@
 import { useState, useMemo } from 'react';
-import { Pencil, Check } from 'lucide-react';
+import { Pencil, Check, AlertCircle } from 'lucide-react';
 import { SectionCard } from './SectionCard';
 import { PillButton } from './PillButton';
 import { TextInput } from './TextInput';
+import { useCheckProfileName } from '@/hooks/usePricingProfiles';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface BasicPricingSummaryProps {
   name: string;
   onNameChange: (name: string) => void;
   isEditMode: boolean;
+  profileId?: string;
 }
 
-export function BasicPricingSummary({ name, onNameChange, isEditMode }: BasicPricingSummaryProps) {
+export function BasicPricingSummary({ name, onNameChange, isEditMode, profileId }: BasicPricingSummaryProps) {
   const [editing, setEditing] = useState(!isEditMode || !name);
+
+  const debouncedName = useDebounce(name, 400);
+  const { data: nameExists } = useCheckProfileName(debouncedName, isEditMode ? profileId : undefined);
 
   const expiryDate = useMemo(() => {
     const date = new Date();
@@ -24,7 +30,7 @@ export function BasicPricingSummary({ name, onNameChange, isEditMode }: BasicPri
       <SectionCard
         title="Basic Pricing Profile"
         subtitle="Cheeky little description goes in here"
-        status={name ? 'completed' : 'not-started'}
+        status={name && !nameExists ? 'completed' : 'not-started'}
       >
         <div className="my-5 border-t border-surface-border-soft" />
 
@@ -38,8 +44,16 @@ export function BasicPricingSummary({ name, onNameChange, isEditMode }: BasicPri
               value={name}
               onChange={onNameChange}
             />
+            {nameExists && (
+              <div className="mt-2 flex items-center gap-1.5 text-red-600">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                <p className="text-[13px]">
+                  A profile named "<span className="font-semibold">{debouncedName}</span>" already exists
+                </p>
+              </div>
+            )}
           </div>
-          {name && (
+          {name && !nameExists && (
             <PillButton
               variant="primary"
               icon={<Check className="h-3.5 w-3.5" />}

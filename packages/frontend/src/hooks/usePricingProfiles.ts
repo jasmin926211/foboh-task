@@ -4,7 +4,8 @@ import {
   fetchProfile,
   createProfile,
   updateProfile,
-  previewPrices
+  previewPrices,
+  checkProfileName,
 } from '@/api/pricingProfiles';
 import type { UpdateProfilePayload } from '@/api/pricingProfiles';
 import type { CreateProfilePayload, PreviewPricesPayload } from '@/types';
@@ -46,6 +47,14 @@ export function useUpdateProfile() {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
     }
+  });
+}
+
+export function useCheckProfileName(name: string, excludeId?: string) {
+  return useQuery({
+    queryKey: ['check-profile-name', name, excludeId],
+    queryFn: () => checkProfileName(name, excludeId),
+    enabled: name.trim().length > 0,
   });
 }
 

@@ -22,6 +22,13 @@ export const fetchProfiles = async (
   return data;
 };
 
+export const checkProfileName = async (name: string, excludeId?: string): Promise<boolean> => {
+  const params: Record<string, string> = { name };
+  if (excludeId) params.excludeId = excludeId;
+  const { data } = await apiClient.get('/pricing-profiles/check-name', { params });
+  return data.exists;
+};
+
 export const fetchProfile = async (id: string) => {
   const { data } = await apiClient.get(`/pricing-profiles/${id}`);
   return data;
