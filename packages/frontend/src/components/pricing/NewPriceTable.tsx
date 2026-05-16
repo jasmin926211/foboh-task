@@ -1,11 +1,38 @@
 import { Checkbox } from './Checkbox';
-import type { PriceTableRow } from '@/lib/seed';
 
-interface NewPriceTableProps {
-  rows: PriceTableRow[];
+export interface PriceRow {
+  productId: string;
+  title: string;
+  sku: string;
+  category: string;
+  basePrice: number;
+  adjustment: number;
+  newPrice: number;
 }
 
-export function NewPriceTable({ rows }: NewPriceTableProps) {
+interface NewPriceTableProps {
+  rows: PriceRow[];
+  adjustmentDirection: 'increase' | 'decrease';
+  adjustmentType: 'fixed' | 'dynamic';
+}
+
+export function NewPriceTable({ rows, adjustmentDirection, adjustmentType }: NewPriceTableProps) {
+  const formatAdjustment = (value: number) => {
+    const sign = adjustmentDirection === 'increase' ? '+' : '-';
+    if (adjustmentType === 'dynamic') {
+      return `${sign} ${Math.abs(value).toFixed(2)}%`;
+    }
+    return `${sign}$ ${Math.abs(value).toFixed(2)}`;
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-card border border-surface-border-soft bg-surface-panel px-6 py-8 text-center text-sm text-ink-500">
+        Select products and set adjustment values to see the price table.
+      </div>
+    );
+  }
+
   return (
     <table className="w-full">
       <thead>
@@ -23,20 +50,18 @@ export function NewPriceTable({ rows }: NewPriceTableProps) {
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={row.id} className="border-b border-surface-border-soft">
+          <tr key={row.productId} className="border-b border-surface-border-soft">
             <td className="py-4">
               <Checkbox checked={false} onChange={() => {}} />
             </td>
             <td className="py-4 text-sm text-ink-900">{row.title}</td>
-            <td className="py-4 text-sm text-ink-700">{row.skuCode}</td>
+            <td className="py-4 text-sm text-ink-700">{row.sku}</td>
             <td className="py-4 text-sm text-ink-700">{row.category}</td>
-            <td className="py-4 text-sm text-ink-900">${row.basedOnPrice.toFixed(2)}</td>
+            <td className="py-4 text-sm text-ink-900">${row.basePrice.toFixed(2)}</td>
             <td className="py-4">
-              <input
-                type="text"
-                defaultValue={`-$ ${Math.abs(row.adjustment).toFixed(2)}`}
-                className="h-10 w-28 rounded-input border-2 border-accent-green bg-accent-green-soft px-3 text-sm font-medium text-ink-900 focus:outline-none"
-              />
+              <span className="inline-block h-10 w-28 rounded-input border-2 border-accent-green bg-accent-green-soft px-3 text-sm font-medium leading-10 text-ink-900">
+                {formatAdjustment(row.adjustment)}
+              </span>
             </td>
             <td className="py-4 text-sm font-semibold text-ink-900">
               ${row.newPrice.toFixed(2)}

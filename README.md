@@ -731,17 +731,3 @@ DATABASE_URL="postgresql://user:password@ep-cool-name-123456.us-east-2.aws.neon.
 The frontend uses Vite's built-in dev server proxy — no environment variables required. All `/api` requests are proxied to `http://localhost:5000` during development.
 
 ---
-
-## Deployment
-
-### Build for Production
-
-```bash
-# From the root directory — builds both backend and frontend
-npm run build
-```
-
-This runs:
-
-1. `tsc` in `packages/backend/` → compiles TypeScript to `packages/backend/dist/`
-2. `tsc -b && vite build` in `packages/frontend/` → type-checks and bundles to `packages/frontend/dist/`

@@ -1,26 +1,128 @@
-import { useState } from 'react';
-import { Search, ChevronDown, Lightbulb, RefreshCw } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { Search, ChevronDown, Lightbulb, RefreshCw, Loader2 } from 'lucide-react';
 import { SectionCard } from './SectionCard';
 import { RadioGroup } from './RadioGroup';
 import { TextInput } from './TextInput';
 import { SelectInput } from './SelectInput';
 import { ProductRow } from './ProductRow';
-import { NewPriceTable } from './NewPriceTable';
+import { NewPriceTable, type PriceRow } from './NewPriceTable';
 import { PillButton } from './PillButton';
-import { seedProducts, priceTableRows, type SeedProduct } from '@/lib/seed';
+import { useProducts } from '@/hooks/useProducts';
+import { computePrice } from '@/lib/computePrice';
+import type { Product } from '@/types';
 
-export function SetProductPricing() {
+interface SetProductPricingProps {
+  profileName: string;
+  selectedProductIds: Set<string>;
+  onSelectedChange: (ids: Set<string>) => void;
+  adjustmentType: 'fixed' | 'dynamic';
+  onAdjustmentTypeChange: (value: 'fixed' | 'dynamic') => void;
+  adjustmentDirection: 'increase' | 'decrease';
+  onAdjustmentDirectionChange: (value: 'increase' | 'decrease') => void;
+  adjustmentValue: number;
+  onAdjustmentValueChange: (value: number) => void;
+}
+
+export function SetProductPricing({
+  profileName,
+  selectedProductIds,
+  onSelectedChange,
+  adjustmentType,
+  onAdjustmentTypeChange,
+  adjustmentDirection,
+  onAdjustmentDirectionChange,
+  adjustmentValue,
+  onAdjustmentValueChange,
+}: SetProductPricingProps) {
   const [profileScope, setProfileScope] = useState('multiple');
   const [selectAll, setSelectAll] = useState('deselect');
-  const [adjustmentMode, setAdjustmentMode] = useState('fixed');
-  const [incrementMode, setIncrementMode] = useState('decrease');
-  const [products, setProducts] = useState<SeedProduct[]>(seedProducts);
 
-  const selectedCount = products.filter((p) => p.checked).length;
+  // Search & filter state
+  const [searchTerm, setSearchTerm] = useState('');
+  const [skuSearch, setSkuSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [segmentFilter, setSegmentFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
 
-  const toggleProduct = (id: string, checked: boolean) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, checked } : p)));
-  };
+  // Build query params — combine search + SKU into one search param
+  const queryParams = useMemo(() => {
+    const params: Record<string, string> = {};
+    const search = searchTerm || skuSearch;
+    if (search) params.search = search;
+    if (categoryFilter) params.subCategory = categoryFilter;
+    if (segmentFilter) params.segment = segmentFilter;
+    if (brandFilter) params.brand = brandFilter;
+    return Object.keys(params).length > 0 ? params : undefined;
+  }, [searchTerm, skuSearch, categoryFilter, segmentFilter, brandFilter]);
+
+  const { data: products = [], isLoading, isError } = useProducts(queryParams);
+
+  // Extract unique values for filter dropdowns
+  const { categories, segments, brands } = useMemo(() => {
+    return {
+      categories: [...new Set(products.map((p: Product) => p.subCategory))].sort(),
+      segments: [...new Set(products.map((p: Product) => p.segment))].sort(),
+      brands: [...new Set(products.map((p: Product) => p.brand))].sort(),
+    };
+  }, [products]);
+
+  const selectedCount = selectedProductIds.size;
+
+  const toggleProduct = useCallback(
+    (id: string, checked: boolean) => {
+      const next = new Set(selectedProductIds);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      onSelectedChange(next);
+    },
+    [selectedProductIds, onSelectedChange]
+  );
+
+  const handleSelectAll = useCallback(
+    (val: string) => {
+      setSelectAll(val);
+      if (val === 'select') {
+        onSelectedChange(new Set(products.map((p: Product) => p.id)));
+      } else {
+        onSelectedChange(new Set());
+      }
+    },
+    [products, onSelectedChange]
+  );
+
+  // Active filter pills
+  const activeFilters = useMemo(() => {
+    const pills: string[] = [];
+    if (categoryFilter) pills.push(categoryFilter);
+    if (segmentFilter) pills.push(segmentFilter);
+    if (brandFilter) pills.push(brandFilter);
+    return pills;
+  }, [categoryFilter, segmentFilter, brandFilter]);
+
+  // Compute price table rows from selected products
+  const priceRows: PriceRow[] = useMemo(() => {
+    return products
+      .filter((p: Product) => selectedProductIds.has(p.id))
+      .map((p: Product) => {
+        const newPrice = computePrice(p.basePrice, adjustmentType, adjustmentDirection, adjustmentValue);
+        const adjustmentAmount =
+          adjustmentType === 'fixed'
+            ? adjustmentValue
+            : (p.basePrice * adjustmentValue) / 100;
+        return {
+          productId: p.id,
+          title: p.title,
+          sku: p.sku,
+          category: p.subCategory,
+          basePrice: p.basePrice,
+          adjustment: adjustmentAmount,
+          newPrice,
+        };
+      });
+  }, [products, selectedProductIds, adjustmentType, adjustmentDirection, adjustmentValue]);
 
   return (
     <SectionCard title="Set Product Pricing" subtitle="Set details">
@@ -35,10 +137,16 @@ export function SetProductPricing() {
           options={[
             { label: 'One Product', value: 'one' },
             { label: 'Multiple Products', value: 'multiple' },
-            { label: 'All Products', value: 'all' }
+            { label: 'All Products', value: 'all' },
           ]}
           value={profileScope}
-          onChange={setProfileScope}
+          onChange={(val) => {
+            setProfileScope(val);
+            if (val === 'all') {
+              onSelectedChange(new Set(products.map((p: Product) => p.id)));
+              setSelectAll('select');
+            }
+          }}
         />
       </div>
 
@@ -50,18 +158,38 @@ export function SetProductPricing() {
         <div className="flex gap-3">
           <TextInput
             placeholder="Search"
+            value={searchTerm}
+            onChange={setSearchTerm}
             iconLeft={<Search className="h-4 w-4" />}
-            iconRight={
-              <span className="flex h-6 w-6 items-center justify-center rounded bg-surface-panel">
-                <Search className="h-3.5 w-3.5" />
-              </span>
-            }
             className="flex-1"
           />
-          <TextInput placeholder="Product / SKU" className="flex-1" />
-          <SelectInput placeholder="Category" className="flex-1" />
-          <SelectInput placeholder="Segment" className="flex-1" />
-          <SelectInput placeholder="Brand" className="flex-1" />
+          <TextInput
+            placeholder="Product / SKU"
+            value={skuSearch}
+            onChange={setSkuSearch}
+            className="flex-1"
+          />
+          <SelectInput
+            placeholder="Category"
+            value={categoryFilter}
+            options={categories}
+            onChange={setCategoryFilter}
+            className="flex-1"
+          />
+          <SelectInput
+            placeholder="Segment"
+            value={segmentFilter}
+            options={segments}
+            onChange={setSegmentFilter}
+            className="flex-1"
+          />
+          <SelectInput
+            placeholder="Brand"
+            value={brandFilter}
+            options={brands}
+            onChange={setBrandFilter}
+            className="flex-1"
+          />
         </div>
       </div>
 
@@ -70,16 +198,26 @@ export function SetProductPricing() {
         <div className="flex items-center gap-3 text-[13px]">
           <p>
             <span className="text-ink-500">Showing </span>
-            <span className="font-semibold text-ink-900">6 Result</span>
-            <span className="text-ink-500"> for </span>
-            <span className="font-semibold text-ink-900">Product Name or SKU Code</span>
+            <span className="font-semibold text-ink-900">
+              {products.length} {products.length === 1 ? 'Result' : 'Results'}
+            </span>
+            {(searchTerm || skuSearch) && (
+              <>
+                <span className="text-ink-500"> for </span>
+                <span className="font-semibold text-ink-900">
+                  {searchTerm || skuSearch}
+                </span>
+              </>
+            )}
           </p>
-          <span className="rounded-pill bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-ink-900">
-            Brand
-          </span>
-          <span className="rounded-pill bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-ink-900">
-            Brand
-          </span>
+          {activeFilters.map((filter) => (
+            <span
+              key={filter}
+              className="rounded-pill bg-[#EEF2FF] px-3 py-1 text-xs font-medium text-ink-900"
+            >
+              {filter}
+            </span>
+          ))}
         </div>
         <div className="my-4 border-t border-surface-border-soft" />
       </div>
@@ -88,27 +226,37 @@ export function SetProductPricing() {
       <RadioGroup
         options={[
           { label: 'Deselect All', value: 'deselect' },
-          { label: 'Select all', value: 'select' }
+          { label: 'Select all', value: 'select' },
         ]}
         value={selectAll}
-        onChange={(val) => {
-          setSelectAll(val);
-          setProducts((prev) =>
-            prev.map((p) => ({ ...p, checked: val === 'select' }))
-          );
-        }}
+        onChange={handleSelectAll}
       />
 
       {/* 6.5 Product list */}
       <div className="mt-4">
-        {products.map((product, index) => (
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-ink-500">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading products...
+          </div>
+        )}
+        {isError && (
+          <div className="py-8 text-center text-sm text-red-500">
+            Failed to load products. Make sure the backend is running.
+          </div>
+        )}
+        {!isLoading && !isError && products.length === 0 && (
+          <div className="py-8 text-center text-sm text-ink-500">
+            No products found matching your filters.
+          </div>
+        )}
+        {products.map((product: Product, index: number) => (
           <ProductRow
             key={product.id}
-            name={product.name}
+            name={product.title}
             sku={product.sku}
-            pack={product.pack}
-            image={product.image}
-            checked={product.checked}
+            subtitle={`${product.subCategory} · ${product.segment} · ${product.brand}`}
+            checked={selectedProductIds.has(product.id)}
             onToggle={(checked) => toggleProduct(product.id, checked)}
             isLast={index === products.length - 1}
           />
@@ -119,8 +267,8 @@ export function SetProductPricing() {
       <p className="mt-4 text-[13px]">
         <span className="text-ink-500">You've selected </span>
         <span className="font-semibold text-ink-900">{selectedCount} Products</span>
-        <span className="text-ink-500">, these will be added </span>
-        <span className="font-semibold text-ink-900">{'Profile Name'}</span>
+        <span className="text-ink-500">, these will be added to </span>
+        <span className="font-semibold text-ink-900">{profileName || 'Profile Name'}</span>
       </p>
 
       <div className="my-6 border-t border-surface-border-soft" />
@@ -144,10 +292,10 @@ export function SetProductPricing() {
         <RadioGroup
           options={[
             { label: 'Fixed ($)', value: 'fixed' },
-            { label: 'Dynamic (%)', value: 'dynamic' }
+            { label: 'Dynamic (%)', value: 'dynamic' },
           ]}
-          value={adjustmentMode}
-          onChange={setAdjustmentMode}
+          value={adjustmentType}
+          onChange={(val) => onAdjustmentTypeChange(val as 'fixed' | 'dynamic')}
         />
       </div>
 
@@ -159,11 +307,29 @@ export function SetProductPricing() {
         <RadioGroup
           options={[
             { label: 'Increase +', value: 'increase' },
-            { label: 'Decrease -', value: 'decrease' }
+            { label: 'Decrease -', value: 'decrease' },
           ]}
-          value={incrementMode}
-          onChange={setIncrementMode}
+          value={adjustmentDirection}
+          onChange={(val) => onAdjustmentDirectionChange(val as 'increase' | 'decrease')}
         />
+      </div>
+
+      {/* Adjustment value input */}
+      <div className="mt-6">
+        <label className="mb-2 block text-[13px] font-medium text-ink-700">
+          Adjustment Value {adjustmentType === 'dynamic' ? '(%)' : '($)'}
+        </label>
+        <div className="relative w-[200px]">
+          <input
+            type="number"
+            min="0"
+            step={adjustmentType === 'dynamic' ? '1' : '0.01'}
+            value={adjustmentValue || ''}
+            onChange={(e) => onAdjustmentValueChange(parseFloat(e.target.value) || 0)}
+            placeholder={adjustmentType === 'dynamic' ? 'e.g. 10' : 'e.g. 5.00'}
+            className="h-11 w-full rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+          />
+        </div>
       </div>
 
       {/* 6.10 Tip note */}
@@ -188,7 +354,11 @@ export function SetProductPricing() {
 
       {/* 6.12 New Price Table */}
       <div className="mt-4">
-        <NewPriceTable rows={priceTableRows} />
+        <NewPriceTable
+          rows={priceRows}
+          adjustmentDirection={adjustmentDirection}
+          adjustmentType={adjustmentType}
+        />
       </div>
 
       {/* 6.13 Footer */}

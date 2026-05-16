@@ -15,6 +15,7 @@ function App() {
           {/* Pricing pages with AppShell (sidebar + topbar) */}
           <Route element={<AppShell />}>
             <Route path="/pricing/setup" element={<SetupPage />} />
+            <Route path="/pricing/setup/:id" element={<SetupPage />} />
           </Route>
 
           {/* Original routes with simple layout */}

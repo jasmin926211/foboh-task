@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { PricingProfile, CreateProfilePayload, ResolvedPrice } from '../types';
+import type { PricingProfile, CreateProfilePayload, ResolvedPrice } from '../types';
 
 export const fetchProfiles = async (customerName?: string): Promise<PricingProfile[]> => {
   const { data } = await apiClient.get('/pricing-profiles', {

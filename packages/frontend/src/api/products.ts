@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Product } from '../types';
+import type { Product } from '../types';
 
 export const fetchProducts = async (params?: {
   search?: string;
