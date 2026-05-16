@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Pencil, Check, AlertCircle } from 'lucide-react';
 import { SectionCard } from './SectionCard';
 import { PillButton } from './PillButton';
@@ -19,17 +19,11 @@ export function BasicPricingSummary({ name, onNameChange, isEditMode, profileId 
   const debouncedName = useDebounce(name, 400);
   const { data: nameExists } = useCheckProfileName(debouncedName, isEditMode ? profileId : undefined);
 
-  const expiryDate = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() + 16);
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }, []);
-
   if (editing) {
     return (
       <SectionCard
         title="Basic Pricing Profile"
-        subtitle="Cheeky little description goes in here"
+        subtitle="Name your pricing profile to get started"
         status={name && !nameExists ? 'completed' : 'not-started'}
       >
         <div className="my-5 border-t border-surface-border-soft" />
@@ -71,7 +65,7 @@ export function BasicPricingSummary({ name, onNameChange, isEditMode, profileId 
   return (
     <SectionCard
       title="Basic Pricing Profile"
-      subtitle="Cheeky little description goes in here"
+      subtitle="Name your pricing profile to get started"
       status="completed"
     >
       <div className="my-5 border-t border-surface-border-soft" />
@@ -80,11 +74,6 @@ export function BasicPricingSummary({ name, onNameChange, isEditMode, profileId 
         <div>
           <p className="text-xs text-ink-500">You've created a Price Profile</p>
           <p className="mt-1 text-base font-semibold text-ink-900">{name}</p>
-          <p className="mt-0.5 text-[13px] text-ink-500">
-            Marked as <span className="font-semibold text-ink-900">Default</span>, and expires in{' '}
-            <span className="font-semibold text-ink-900">16 Days</span>{' '}
-            <span className="font-semibold text-ink-900">{expiryDate}</span>
-          </p>
         </div>
 
         <button

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { Search, ChevronDown, Lightbulb, RefreshCw, Loader2, Pencil, Package, AlertTriangle, Info } from 'lucide-react';
+import { Search, ChevronDown, Lightbulb, Loader2, Pencil, Package, AlertTriangle, Info } from 'lucide-react';
 import { SectionCard } from './SectionCard';
 import { RadioGroup } from './RadioGroup';
 import { TextInput } from './TextInput';
@@ -214,7 +214,7 @@ export function SetProductPricing({
     return (
       <SectionCard
         title="Set Product Pricing"
-        subtitle="Cheeky little description goes in here"
+        subtitle="Select products and configure price adjustments"
         status="completed"
       >
         <div className="my-5 border-t border-surface-border-soft" />
@@ -454,7 +454,10 @@ export function SetProductPricing({
       <div>
         <label className="mb-2 block text-[13px] font-medium text-ink-700">Based on</label>
         <div className="relative w-[280px]">
-          <select className="h-11 w-full appearance-none rounded-input border border-surface-border bg-white px-3.5 pr-10 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30">
+          <select
+            disabled
+            className="h-11 w-full appearance-none rounded-input border border-surface-border bg-gray-50 px-3.5 pr-10 text-sm text-ink-500 cursor-not-allowed"
+          >
             <option>Based on Price</option>
           </select>
           <ChevronDown className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-500" />
@@ -547,15 +550,7 @@ export function SetProductPricing({
         </div>
       )}
 
-      {/* 6.11 Refresh link — hidden for custom */}
-      {!isCustom && (
-        <div className="mt-4 flex justify-end">
-          <button className="inline-flex items-center gap-2 text-[13px] font-semibold text-status-purple">
-            Refresh New Price Table
-            <RefreshCw className={`h-3.5 w-3.5 ${isPreviewLoading ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      )}
+      {/* Price table auto-updates via TanStack Query */}
 
       {/* Warnings banner */}
       {warnings.length > 0 && (
@@ -594,7 +589,13 @@ export function SetProductPricing({
       <div className="mt-8 flex items-center justify-between">
         <p className="text-xs text-ink-400">Your entries are saved automatically</p>
         <div className="flex items-center gap-6">
-          <button className="text-sm font-medium text-ink-700 hover:text-ink-900">Back</button>
+          <button
+            type="button"
+            onClick={() => { if (isComplete) setIsCollapsed(true); }}
+            className="text-sm font-medium text-ink-700 hover:text-ink-900"
+          >
+            Back
+          </button>
           <PillButton
             variant="primary"
             className="px-7"

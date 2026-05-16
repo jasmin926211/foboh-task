@@ -14,7 +14,12 @@ const getProductController = wrapController('getProductController', async (req) 
   data: await productServices.getProduct(req.params.id as string),
 }));
 
+const updateProductController = wrapController('updateProductController', async (req) => ({
+  data: await productServices.updateProduct(req.params.id as string, req.body),
+}));
+
 router.get('/', validateRequest(policies.listProductsPolicy), listProductsController);
 router.get('/:id', validateRequest(policies.getProductPolicy), getProductController);
+router.put('/:id', validateRequest(policies.updateProductPolicy), updateProductController);
 
 export default router;

@@ -7,6 +7,8 @@ export interface Product {
   segment: string;
   brand: string;
   basePrice: number;
+  costPrice?: number | null;
+  minMarginPercent?: number | null;
   deletedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -72,31 +74,50 @@ export interface ComputedPrice {
   newPrice: number;
 }
 
+export interface WaterfallEntry {
+  position: number;
+  profileId: string;
+  profileName: string;
+  customerName: string;
+  tier: number | null;
+  tierLabel: string | null;
+  scope: string;
+  adjustment: {
+    type: string;
+    direction: string | null;
+    value: number | null;
+  };
+  computedPrice: number;
+  priceAfterFloor: number | null;
+  verdict: 'won' | 'lost' | 'rejected';
+  reason: string;
+}
+
+export interface MarginInsight {
+  triggered: boolean;
+  winningPrice: number;
+  sameTierAvgPrice: number;
+  divergencePercent: number;
+  message: string | null;
+}
+
 export interface ResolvedPrice {
   productId: string;
   productTitle: string;
   basePrice: number;
-  newPrice: number;
+  finalPrice: number;
   appliedProfile: { id: string; name: string } | null;
   tier: number | null;
   tierLabel: string | null;
   reason: string;
-  candidateProfiles: {
-    id: string;
-    name: string;
-    customerName: string;
-    adjustment: { type: string; direction: string | null; value: number | null };
-    computedPrice: number;
-    updatedAt: string;
-    scope: string;
-    tier: number;
-    tierLabel: string;
-  }[];
-  rejectedProfiles: {
-    id: string;
-    name: string;
-    rejectionReason: string;
-  }[];
+
+  costPrice: number | null;
+  minMarginPercent: number | null;
+  floorPrice: number | null;
+  floorApplied: boolean;
+
+  waterfall: WaterfallEntry[];
+  marginInsight: MarginInsight;
 }
 
 export interface PaginatedProfiles {

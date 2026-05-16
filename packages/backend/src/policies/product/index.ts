@@ -14,3 +14,13 @@ export const getProductPolicy = {
     id: z.string().uuid(),
   }),
 };
+
+export const updateProductPolicy = {
+  params: z.object({
+    id: z.string().uuid(),
+  }),
+  body: z.object({
+    costPrice: z.number().nullable().optional(),
+    minMarginPercent: z.number().min(0).max(100).nullable().optional(),
+  }),
+};

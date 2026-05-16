@@ -5,7 +5,7 @@ import { fetchResolvedPrices } from '@/api/pricingProfiles';
 import { useCustomers } from '@/hooks/useCustomers';
 import { PillButton } from '@/components/pricing/PillButton';
 import { QUERY_KEYS } from '@/lib/queryKeys';
-import type { ResolvedPrice } from '@/types';
+import type { ResolvedPrice, WaterfallEntry } from '@/types';
 
 export function ResolvedPricesPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState('');
@@ -95,17 +95,24 @@ export function ResolvedPricesPage() {
                     <th className="w-8 px-3 py-3" />
                     <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Product</th>
                     <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">Base Price</th>
-                    <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">New Price</th>
+                    <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">Final Price</th>
                     <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">Difference</th>
+                    <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">Floor</th>
                     <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Applied Profile</th>
                     <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Tier</th>
                   </tr>
                 </thead>
                 <tbody>
                   {prices.map((price: ResolvedPrice) => {
-                    const diff = price.newPrice - price.basePrice;
+                    const diff = price.finalPrice - price.basePrice;
                     const hasProfile = !!price.appliedProfile;
                     const isExpanded = expandedProductId === price.productId;
+
+                    const verdictBadge = (verdict: WaterfallEntry['verdict']) => {
+                      if (verdict === 'won') return 'rounded-pill bg-accent-green-soft px-2 py-0.5 text-[11px] font-medium text-accent-green';
+                      if (verdict === 'rejected') return 'rounded-pill bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-600';
+                      return 'rounded-pill bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-ink-500';
+                    };
 
                     return (
                       <Fragment key={price.productId}>
@@ -127,12 +134,25 @@ export function ResolvedPricesPage() {
                             ${price.basePrice.toFixed(2)}
                           </td>
                           <td className="px-6 py-4 text-right text-sm font-semibold text-ink-900">
-                            ${price.newPrice.toFixed(2)}
+                            ${price.finalPrice.toFixed(2)}
                           </td>
                           <td className="px-6 py-4 text-right text-sm">
                             {hasProfile ? (
                               <span className={diff >= 0 ? 'text-accent-green' : 'text-red-500'}>
                                 {diff >= 0 ? '+' : ''}{diff.toFixed(2)}
+                              </span>
+                            ) : (
+                              <span className="text-ink-400">&mdash;</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right text-sm">
+                            {price.floorPrice != null ? (
+                              <span className={price.floorApplied
+                                ? 'rounded-pill bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700'
+                                : 'text-ink-500'
+                              }>
+                                ${price.floorPrice.toFixed(2)}
+                                {price.floorApplied && ' (applied)'}
                               </span>
                             ) : (
                               <span className="text-ink-400">&mdash;</span>
@@ -160,7 +180,7 @@ export function ResolvedPricesPage() {
                         {/* Expanded detail row */}
                         {isExpanded && hasProfile && (
                           <tr className="border-b border-surface-border-soft bg-gray-50">
-                            <td colSpan={7} className="px-10 py-4">
+                            <td colSpan={8} className="px-10 py-4">
                               {/* Tier info */}
                               {price.tierLabel && (
                                 <p className="mb-2 text-[13px]">
@@ -170,50 +190,89 @@ export function ResolvedPricesPage() {
                                 </p>
                               )}
 
+                              {/* Floor Protection Info */}
+                              {price.costPrice != null && (
+                                <div className="mb-2 flex items-center gap-4 text-[13px]">
+                                  <span className="text-ink-500">Cost: <span className="font-medium text-ink-700">${price.costPrice.toFixed(2)}</span></span>
+                                  {price.minMarginPercent != null && (
+                                    <span className="text-ink-500">Min Margin: <span className="font-medium text-ink-700">{price.minMarginPercent}%</span></span>
+                                  )}
+                                  {price.floorPrice != null && (
+                                    <span className="text-ink-500">Floor: <span className="font-medium text-ink-700">${price.floorPrice.toFixed(2)}</span></span>
+                                  )}
+                                  {price.floorApplied && (
+                                    <span className="rounded-pill bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+                                      Floor Triggered
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+
                               {/* Reason */}
                               <p className="text-[13px] text-ink-700">
                                 <span className="font-medium">Reason:</span> {price.reason}
                               </p>
 
-                              {/* Candidate Profiles */}
-                              {price.candidateProfiles.length > 0 && (
+                              {/* Waterfall Table */}
+                              {price.waterfall.length > 0 && (
                                 <div className="mt-3">
-                                  <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Candidate Profiles</p>
-                                  <div className="mt-1.5 space-y-1">
-                                    {price.candidateProfiles.map((cp) => (
-                                      <div key={cp.id} className="flex items-center gap-4 text-[13px] text-ink-700">
-                                        <span className="font-medium">{cp.name}</span>
-                                        <span className="rounded-pill bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
-                                          T{cp.tier}
-                                        </span>
-                                        <span className="text-ink-500">{cp.customerName}</span>
-                                        {cp.adjustment.direction && cp.adjustment.value != null && (
-                                          <span className="text-ink-500">
-                                            {cp.adjustment.direction === 'increase' ? '+' : '-'}
-                                            {cp.adjustment.type === 'dynamic' ? `${cp.adjustment.value}%` : `$${cp.adjustment.value.toFixed(2)}`}
-                                          </span>
-                                        )}
-                                        <span className="font-semibold">${cp.computedPrice.toFixed(2)}</span>
-                                        <span className="text-ink-400">
-                                          scope: {cp.scope} | updated: {new Date(cp.updatedAt).toLocaleDateString()}
-                                        </span>
-                                      </div>
-                                    ))}
+                                  <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-500">Price Waterfall</p>
+                                  <div className="overflow-x-auto rounded-lg border border-surface-border-soft">
+                                    <table className="w-full text-[13px]">
+                                      <thead>
+                                        <tr className="border-b border-surface-border bg-gray-100/60">
+                                          <th className="px-3 py-2 text-left font-medium text-ink-500">#</th>
+                                          <th className="px-3 py-2 text-left font-medium text-ink-500">Profile</th>
+                                          <th className="px-3 py-2 text-left font-medium text-ink-500">Customer</th>
+                                          <th className="px-3 py-2 text-center font-medium text-ink-500">Tier</th>
+                                          <th className="px-3 py-2 text-right font-medium text-ink-500">Price</th>
+                                          <th className="px-3 py-2 text-right font-medium text-ink-500">Floor Price</th>
+                                          <th className="px-3 py-2 text-center font-medium text-ink-500">Verdict</th>
+                                          <th className="px-3 py-2 text-left font-medium text-ink-500">Reason</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {price.waterfall.map((w: WaterfallEntry) => (
+                                          <tr key={w.profileId} className="border-b border-surface-border-soft last:border-b-0">
+                                            <td className="px-3 py-2 text-ink-500">{w.position}</td>
+                                            <td className="px-3 py-2 font-medium text-ink-900">{w.profileName}</td>
+                                            <td className="px-3 py-2 text-ink-700">{w.customerName}</td>
+                                            <td className="px-3 py-2 text-center">
+                                              {w.tier != null ? (
+                                                <span className="rounded-pill bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700">
+                                                  T{w.tier}
+                                                </span>
+                                              ) : (
+                                                <span className="text-ink-400">&mdash;</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2 text-right font-semibold text-ink-900">${w.computedPrice.toFixed(2)}</td>
+                                            <td className="px-3 py-2 text-right">
+                                              {w.priceAfterFloor != null ? (
+                                                <span className="font-medium text-amber-700">${w.priceAfterFloor.toFixed(2)}</span>
+                                              ) : (
+                                                <span className="text-ink-400">&mdash;</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2 text-center">
+                                              <span className={verdictBadge(w.verdict)}>{w.verdict}</span>
+                                            </td>
+                                            <td className="px-3 py-2 text-ink-600">{w.reason}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 </div>
                               )}
 
-                              {/* Rejected Profiles */}
-                              {price.rejectedProfiles.length > 0 && (
-                                <div className="mt-3">
-                                  <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Rejected Profiles</p>
-                                  <div className="mt-1.5 space-y-1">
-                                    {price.rejectedProfiles.map((rp) => (
-                                      <div key={rp.id} className="flex items-center gap-4 text-[13px] text-ink-700">
-                                        <span className="font-medium">{rp.name}</span>
-                                        <span className="text-red-500">{rp.rejectionReason}</span>
-                                      </div>
-                                    ))}
+                              {/* Margin Insight Banner */}
+                              {price.marginInsight.triggered && (
+                                <div className="mt-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                                  <span className="mt-0.5 text-amber-600 text-sm">&#9888;</span>
+                                  <div className="text-[13px] text-amber-800">
+                                    <span className="font-medium">Margin Insight:</span>{' '}
+                                    {price.marginInsight.message}
                                   </div>
                                 </div>
                               )}

@@ -37,6 +37,23 @@ export const getProduct = async (id: string) => {
   return product;
 };
 
+export const updateProduct = async (id: string, body: { costPrice?: number | null; minMarginPercent?: number | null }) => {
+  logger.info('Entry: updateProduct service');
+
+  await findOrThrow(prisma.product.findUnique({ where: { id } }), 'Product', id);
+
+  const updated = await prisma.product.update({
+    where: { id },
+    data: {
+      ...(body.costPrice !== undefined && { costPrice: body.costPrice }),
+      ...(body.minMarginPercent !== undefined && { minMarginPercent: body.minMarginPercent }),
+    },
+  });
+
+  logger.info('Exit: updateProduct service — success');
+  return updated;
+};
+
 export const softDeleteProduct = async (id: string) => {
   logger.info('Entry: softDeleteProduct service');
 

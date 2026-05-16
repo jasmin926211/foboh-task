@@ -5,66 +5,188 @@ import { PrismaClient } from '@prisma/client';
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
+// --- Task-specified products ---
+
 const products = [
   {
-    title: 'Penfolds Grange 2019',
-    sku: 'PEN-GRG-2019',
+    title: 'High Garden Pinot Noir 2021',
+    sku: 'HGVPIN216',
     category: 'Wine',
     subCategory: 'Red',
     segment: 'Premium',
-    brand: 'Penfolds',
-    basePrice: 850.0,
+    brand: 'High Garden',
+    basePrice: 279.06,
   },
   {
-    title: 'Yellow Tail Shiraz',
-    sku: 'YT-SHZ-001',
-    category: 'Wine',
-    subCategory: 'Red',
-    segment: 'Budget',
-    brand: 'Yellow Tail',
-    basePrice: 8.99,
-  },
-  {
-    title: 'Cloudy Bay Sauvignon Blanc',
-    sku: 'CB-SB-2022',
-    category: 'Wine',
-    subCategory: 'White',
-    segment: 'Premium',
-    brand: 'Cloudy Bay',
-    basePrice: 28.5,
-  },
-  {
-    title: 'Moet & Chandon Imperial',
-    sku: 'MC-IMP-NV',
+    title: 'Koyama Methode Brut Nature NV',
+    sku: 'KOYBRUNV6',
     category: 'Wine',
     subCategory: 'Sparkling',
     segment: 'Premium',
-    brand: 'Moet & Chandon',
-    basePrice: 65.0,
+    brand: 'Koyama Wines',
+    basePrice: 120.0,
   },
   {
-    title: 'Whispering Hills Rose',
-    sku: 'WH-RSE-2023',
+    title: 'Koyama Riesling 2018',
+    sku: 'KOYNR1837',
     category: 'Wine',
-    subCategory: 'Rose',
-    segment: 'Standard',
-    brand: 'Whispering Hills',
-    basePrice: 14.99,
+    subCategory: 'Port/Dessert',
+    segment: 'Premium',
+    brand: 'Koyama Wines',
+    basePrice: 215.04,
+  },
+  {
+    title: 'Koyama Tussock Riesling 2019',
+    sku: 'KOYRIE19',
+    category: 'Wine',
+    subCategory: 'White',
+    segment: 'Premium',
+    brand: 'Koyama Wines',
+    basePrice: 215.04,
+  },
+  {
+    title: 'Lacourte-Godbillon Brut Cru NV',
+    sku: 'LACBNATNV6',
+    category: 'Wine',
+    subCategory: 'Sparkling',
+    segment: 'Premium',
+    brand: 'Lacourte-Godbillon',
+    basePrice: 409.32,
   },
 ];
 
 async function main() {
   console.log('Seeding products...');
 
+  const seededProducts: Record<string, string> = {};
+
   for (const product of products) {
-    await prisma.product.upsert({
+    const p = await prisma.product.upsert({
       where: { sku: product.sku },
       update: product,
       create: product,
     });
+    seededProducts[product.sku] = p.id;
   }
 
   console.log(`Seeded ${products.length} products`);
+
+  // --- Customer ---
+
+  console.log('Seeding customer...');
+  const bondiCellars = await prisma.customer.upsert({
+    where: { name: 'Bondi Cellars' },
+    update: {},
+    create: { name: 'Bondi Cellars', email: 'orders@bondicellars.com.au' },
+  });
+
+  // --- Customer Groups ---
+
+  console.log('Seeding customer groups...');
+  const independentRetailers = await prisma.customerGroup.upsert({
+    where: { name: 'Independent Retailers' },
+    update: {},
+    create: { name: 'Independent Retailers', description: 'Independent bottle shops and wine retailers' },
+  });
+
+  const vipGroup = await prisma.customerGroup.upsert({
+    where: { name: 'VIP' },
+    update: {},
+    create: { name: 'VIP', description: 'High-value customers with priority pricing' },
+  });
+
+  // --- Memberships (Bondi Cellars → both groups) ---
+
+  console.log('Seeding memberships...');
+  await prisma.customerGroupMembership.upsert({
+    where: {
+      customerId_customerGroupId: {
+        customerId: bondiCellars.id,
+        customerGroupId: independentRetailers.id,
+      },
+    },
+    update: {},
+    create: { customerId: bondiCellars.id, customerGroupId: independentRetailers.id },
+  });
+
+  await prisma.customerGroupMembership.upsert({
+    where: {
+      customerId_customerGroupId: {
+        customerId: bondiCellars.id,
+        customerGroupId: vipGroup.id,
+      },
+    },
+    update: {},
+    create: { customerId: bondiCellars.id, customerGroupId: vipGroup.id },
+  });
+
+  // --- Pricing Profiles (3 overlapping demo profiles) ---
+
+  console.log('Seeding pricing profiles...');
+
+  // Profile A: "Wine Discount — Independents"
+  //   10% decrease on ALL products for Independent Retailers group, published
+  const profileA = await prisma.pricingProfile.create({
+    data: {
+      name: 'Wine Discount — Independents',
+      customerGroupId: independentRetailers.id,
+      adjustmentType: 'dynamic',
+      adjustmentDirection: 'decrease',
+      adjustmentValue: 10,
+      status: 'published',
+      scope: 'all',
+    },
+  });
+  console.log(`  Profile A: ${profileA.name} (Tier 4 — Group + All Products)`);
+
+  // Small delay so updatedAt ordering is deterministic
+  await new Promise((r) => setTimeout(r, 100));
+
+  // Profile B: "Sparkling Promo — VIPs"
+  //   $15 decrease on selected Sparkling products for VIP group, published
+  const sparklingSkus = ['KOYBRUNV6', 'LACBNATNV6'];
+  const sparklingIds = sparklingSkus.map((sku) => seededProducts[sku]);
+
+  const profileB = await prisma.pricingProfile.create({
+    data: {
+      name: 'Sparkling Promo — VIPs',
+      customerGroupId: vipGroup.id,
+      adjustmentType: 'fixed',
+      adjustmentDirection: 'decrease',
+      adjustmentValue: 15,
+      status: 'published',
+      scope: 'selected',
+      profileProducts: {
+        create: sparklingIds.map((productId) => ({ productId })),
+      },
+    },
+  });
+  console.log(`  Profile B: ${profileB.name} (Tier 3 — Group + Selected Products)`);
+
+  await new Promise((r) => setTimeout(r, 100));
+
+  // Profile C: "Bondi Cellars — Koyama Special"
+  //   Custom $95 on Koyama Methode for Bondi Cellars customer, published
+  const koyamaMethodeId = seededProducts['KOYBRUNV6'];
+
+  const profileC = await prisma.pricingProfile.create({
+    data: {
+      name: 'Bondi Cellars — Koyama Special',
+      customerId: bondiCellars.id,
+      adjustmentType: 'custom',
+      adjustmentDirection: null,
+      adjustmentValue: null,
+      status: 'published',
+      scope: 'selected',
+      profileProducts: {
+        create: [{ productId: koyamaMethodeId, customPrice: 95 }],
+      },
+    },
+  });
+  console.log(`  Profile C: ${profileC.name} (Tier 1 — Customer + Selected Products)`);
+
+  console.log('\nSeed complete! Demo scenario ready.');
+  console.log('Visit /resolved-prices, select "Bondi Cellars" to see overlapping profile resolution.');
 }
 
 main()

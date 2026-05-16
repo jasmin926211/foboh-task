@@ -4,7 +4,7 @@ import { ResourceNotFoundException, NegativePriceException, ConflictException } 
 import computePrice from '../../utilities/computePrice';
 import findOrThrow from '../../utilities/findOrThrow';
 import { CreateProfileBody, UpdateProfileBody, PreviewPricesBody } from '../../policies/pricingProfile';
-import { PROFILE_SCOPE, PROFILE_STATUS, ADJUSTMENT_TYPE, PAGINATION, PERCENTAGE_DIVISOR } from '../../constants';
+import { PROFILE_SCOPE, PROFILE_STATUS, ADJUSTMENT_TYPE, PAGINATION, PERCENTAGE_DIVISOR, MARGIN_MULTIPLIER_BASE } from '../../constants';
 
 // --- Helper: validate that no computed prices are negative ---
 
@@ -236,6 +236,14 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
     id,
   );
 
+  // Check for duplicate profile name on rename
+  if (body.name && body.name.toLowerCase() !== existing.name.toLowerCase()) {
+    const nameExists = await checkProfileNameExists(body.name, id);
+    if (nameExists) {
+      throw new ConflictException(`A pricing profile named "${body.name}" already exists`);
+    }
+  }
+
   const effectiveScope = (body.scope ?? existing.scope) as 'all' | 'selected';
   const effectiveAdjType = (body.adjustmentType ?? existing.adjustmentType) as 'fixed' | 'dynamic' | 'custom';
   const isCustom = effectiveAdjType === ADJUSTMENT_TYPE.CUSTOM;
@@ -325,7 +333,6 @@ function computeTier(profile: {
   customerId: string | null;
   customerGroupId: string | null;
   scope: string;
-  matchedViaGroup?: boolean;
 }): number {
   if (profile.customerId) {
     return profile.scope === PROFILE_SCOPE.SELECTED ? 1 : 2;
@@ -337,7 +344,17 @@ function computeTier(profile: {
   return profile.scope === PROFILE_SCOPE.SELECTED ? 5 : 6;
 }
 
-// --- Resolve Price (single product) with 6-tier specificity ---
+// --- Empty margin insight (reusable for early returns) ---
+
+const EMPTY_MARGIN_INSIGHT = {
+  triggered: false,
+  winningPrice: 0,
+  sameTierAvgPrice: 0,
+  divergencePercent: 0,
+  message: null as string | null,
+};
+
+// --- Resolve Price (single product) with 6-tier specificity + waterfall ---
 
 export const resolvePrice = async (productId: string, customerId: string) => {
   logger.info('Entry: resolvePrice service');
@@ -347,18 +364,27 @@ export const resolvePrice = async (productId: string, customerId: string) => {
     throw new ResourceNotFoundException(`Product with id ${productId} not found`);
   }
 
+  // Floor protection: clamp to costPrice * (1 + minMarginPercent / 100)
+  const floorPrice = product.costPrice != null && product.minMarginPercent != null
+    ? Math.round(product.costPrice * (MARGIN_MULTIPLIER_BASE + product.minMarginPercent / PERCENTAGE_DIVISOR) * 100) / 100
+    : null;
+
   if (product.deletedAt !== null) {
     return {
       productId: product.id,
       productTitle: product.title,
       basePrice: product.basePrice,
-      newPrice: product.basePrice,
+      finalPrice: product.basePrice,
       appliedProfile: null,
       tier: null,
       tierLabel: null,
       reason: 'Product is soft-deleted; returning base price.',
-      candidateProfiles: [],
-      rejectedProfiles: [],
+      costPrice: product.costPrice ?? null,
+      minMarginPercent: product.minMarginPercent ?? null,
+      floorPrice,
+      floorApplied: false,
+      waterfall: [],
+      marginInsight: { ...EMPTY_MARGIN_INSIGHT },
     };
   }
 
@@ -373,42 +399,30 @@ export const resolvePrice = async (productId: string, customerId: string) => {
 
   const groupIds = customer.memberships.map((m) => m.customerGroupId);
 
-  // Find all published profiles that could apply
-  const profiles = await prisma.pricingProfile.findMany({
-    where: {
-      status: PROFILE_STATUS.PUBLISHED,
-      OR: [
-        { customerId },
-        ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
-        { customerId: null, customerGroupId: null },
-      ],
-    },
-    include: {
-      profileProducts: { where: { productId } },
-      customer: true,
-      customerGroup: true,
-    },
-  });
+  const customerOrGroupFilter = [
+    { customerId },
+    ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
+    { customerId: null, customerGroupId: null },
+  ];
 
-  // Filter to profiles that cover this product
-  const matchingProfiles = profiles.filter((p) => {
-    if (p.scope === PROFILE_SCOPE.ALL) return true;
-    return p.profileProducts.length > 0;
-  });
-
-  if (matchingProfiles.length === 0) {
-    // Check for rejected draft profiles
-    const draftProfiles = await prisma.pricingProfile.findMany({
+  // Find all profiles (published + draft) that could apply
+  const [publishedProfiles, draftProfiles] = await Promise.all([
+    prisma.pricingProfile.findMany({
+      where: {
+        status: PROFILE_STATUS.PUBLISHED,
+        OR: customerOrGroupFilter,
+      },
+      include: {
+        profileProducts: { where: { productId } },
+        customer: true,
+        customerGroup: true,
+      },
+    }),
+    prisma.pricingProfile.findMany({
       where: {
         status: PROFILE_STATUS.DRAFT,
         AND: [
-          {
-            OR: [
-              { customerId },
-              ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
-              { customerId: null, customerGroupId: null },
-            ],
-          },
+          { OR: customerOrGroupFilter },
           {
             OR: [
               { scope: PROFILE_SCOPE.ALL },
@@ -417,35 +431,27 @@ export const resolvePrice = async (productId: string, customerId: string) => {
           },
         ],
       },
-    });
+      include: {
+        profileProducts: { where: { productId } },
+        customer: true,
+        customerGroup: true,
+      },
+    }),
+  ]);
 
-    const rejectedProfiles = draftProfiles.map((p) => ({
-      id: p.id,
-      name: p.name,
-      rejectionReason: 'Profile is in draft status',
-    }));
+  // Filter published profiles to those that cover this product
+  const matchingProfiles = publishedProfiles.filter((p) => {
+    if (p.scope === PROFILE_SCOPE.ALL) return true;
+    return p.profileProducts.length > 0;
+  });
 
-    return {
-      productId: product.id,
-      productTitle: product.title,
-      basePrice: product.basePrice,
-      newPrice: product.basePrice,
-      appliedProfile: null,
-      tier: null,
-      tierLabel: null,
-      reason: 'No published profiles matched this product.',
-      candidateProfiles: [],
-      rejectedProfiles,
-    };
-  }
-
-  // Compute tier for each matching profile, then compute price
-  const candidatesWithTier = matchingProfiles.map((p) => {
+  // Helper to build a waterfall entry from a profile
+  function buildEntry(p: typeof publishedProfiles[number]) {
     const isCustom = p.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
     const junctionRow = p.profileProducts[0];
-    const computedNewPrice = isCustom
-      ? (junctionRow?.customPrice ?? product.basePrice)
-      : computePrice(product.basePrice, {
+    const computedPrice = isCustom
+      ? (junctionRow?.customPrice ?? product!.basePrice)
+      : computePrice(product!.basePrice, {
           adjustmentType: p.adjustmentType,
           adjustmentDirection: p.adjustmentDirection,
           adjustmentValue: p.adjustmentValue,
@@ -458,62 +464,191 @@ export const resolvePrice = async (productId: string, customerId: string) => {
     });
 
     return {
-      id: p.id,
-      name: p.name,
+      profileId: p.id,
+      profileName: p.name,
       customerName: p.customer?.name ?? p.customerGroup?.name ?? 'All Customers',
+      tier,
+      tierLabel: TIER_LABELS[tier],
+      scope: p.scope,
       adjustment: {
         type: p.adjustmentType,
         direction: p.adjustmentDirection,
         value: p.adjustmentValue,
       },
-      computedPrice: computedNewPrice,
-      updatedAt: p.updatedAt,
-      scope: p.scope,
-      tier,
-      tierLabel: TIER_LABELS[tier],
+      computedPrice,
     };
-  });
+  }
 
-  // Sort by tier ASC, then updatedAt DESC
-  candidatesWithTier.sort((a, b) => {
+  if (matchingProfiles.length === 0) {
+    // Build waterfall from draft profiles only (all rejected)
+    const waterfall = draftProfiles.map((p, idx) => {
+      const entry = buildEntry(p);
+      return {
+        position: idx + 1,
+        ...entry,
+        priceAfterFloor: null as number | null,
+        verdict: 'rejected' as const,
+        reason: 'Profile is in draft status',
+      };
+    });
+
+    return {
+      productId: product.id,
+      productTitle: product.title,
+      basePrice: product.basePrice,
+      finalPrice: product.basePrice,
+      appliedProfile: null,
+      tier: null,
+      tierLabel: null,
+      reason: 'No published profiles matched this product.',
+      costPrice: product.costPrice ?? null,
+      minMarginPercent: product.minMarginPercent ?? null,
+      floorPrice,
+      floorApplied: false,
+      waterfall,
+      marginInsight: { ...EMPTY_MARGIN_INSIGHT },
+    };
+  }
+
+  // Build published entries, sort by tier ASC then price ASC
+  const publishedEntries = matchingProfiles.map((p) => buildEntry(p));
+  publishedEntries.sort((a, b) => {
     if (a.tier !== b.tier) return a.tier - b.tier;
-    return b.updatedAt.getTime() - a.updatedAt.getTime();
+    return a.computedPrice - b.computedPrice;
   });
 
-  const winner = candidatesWithTier[0];
+  const winner = publishedEntries[0];
 
-  // Find rejected draft profiles
-  const draftProfiles = await prisma.pricingProfile.findMany({
-    where: {
-      status: PROFILE_STATUS.DRAFT,
-      OR: [
-        { customerId },
-        ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
-        { customerId: null, customerGroupId: null },
-      ],
-    },
-  });
+  // Apply floor to winner
+  const floorApplied = floorPrice != null && winner.computedPrice < floorPrice;
+  const finalPrice = floorApplied ? floorPrice : winner.computedPrice;
 
-  const rejectedProfiles = draftProfiles.map((p) => ({
-      id: p.id,
-      name: p.name,
-      rejectionReason: 'Profile is in draft status',
-    }));
+  // Build waterfall: published entries first, then draft (rejected) entries
+  const waterfall: {
+    position: number;
+    profileId: string;
+    profileName: string;
+    customerName: string;
+    tier: number;
+    tierLabel: string;
+    scope: string;
+    adjustment: { type: string; direction: string | null; value: number | null };
+    computedPrice: number;
+    priceAfterFloor: number | null;
+    verdict: 'won' | 'lost' | 'rejected';
+    reason: string;
+  }[] = [];
 
-  const reason = `Applied profile '${winner.name}' (Tier ${winner.tier} — ${winner.tierLabel}). ${candidatesWithTier.length} profile${candidatesWithTier.length > 1 ? 's' : ''} matched.`;
+  let position = 1;
+  for (const entry of publishedEntries) {
+    const isWinner = entry.profileId === winner.profileId;
+    let verdict: 'won' | 'lost' = 'won';
+    let reason: string;
+
+    if (isWinner) {
+      const floorNote = floorApplied
+        ? `; floor applied ($${winner.computedPrice.toFixed(2)} → $${finalPrice.toFixed(2)})`
+        : '';
+      reason = `Lowest price at Tier ${entry.tier}${floorNote}`;
+    } else if (entry.tier === winner.tier) {
+      verdict = 'lost';
+      reason = `Same tier (${entry.tier}) but higher price than '${winner.profileName}' ($${entry.computedPrice.toFixed(2)} > $${winner.computedPrice.toFixed(2)})`;
+    } else {
+      verdict = 'lost';
+      reason = `Lower specificity tier (${entry.tier} vs winning tier ${winner.tier})`;
+    }
+
+    waterfall.push({
+      position,
+      profileId: entry.profileId,
+      profileName: entry.profileName,
+      customerName: entry.customerName,
+      tier: entry.tier,
+      tierLabel: entry.tierLabel,
+      scope: entry.scope,
+      adjustment: entry.adjustment,
+      computedPrice: entry.computedPrice,
+      priceAfterFloor: isWinner && floorApplied ? finalPrice : null,
+      verdict,
+      reason,
+    });
+    position++;
+  }
+
+  // Add draft profiles as rejected entries
+  for (const p of draftProfiles) {
+    const entry = buildEntry(p);
+    waterfall.push({
+      position,
+      profileId: entry.profileId,
+      profileName: entry.profileName,
+      customerName: entry.customerName,
+      tier: entry.tier,
+      tierLabel: entry.tierLabel,
+      scope: entry.scope,
+      adjustment: entry.adjustment,
+      computedPrice: entry.computedPrice,
+      priceAfterFloor: null,
+      verdict: 'rejected',
+      reason: 'Profile is in draft status',
+    });
+    position++;
+  }
+
+  // Compute margin insight
+  const sameTierEntries = publishedEntries.filter((e) => e.tier === winner.tier);
+  let marginInsight: {
+    triggered: boolean;
+    winningPrice: number;
+    sameTierAvgPrice: number;
+    divergencePercent: number;
+    message: string | null;
+  };
+
+  if (sameTierEntries.length >= 2) {
+    const avgPrice = sameTierEntries.reduce((sum, e) => sum + e.computedPrice, 0) / sameTierEntries.length;
+    const sameTierAvgPrice = Math.round(avgPrice * 100) / 100;
+    const divergencePercent = Math.round(((finalPrice - sameTierAvgPrice) / sameTierAvgPrice) * 10000) / 100;
+    const triggered = Math.abs(divergencePercent) > 10;
+
+    marginInsight = {
+      triggered,
+      winningPrice: finalPrice,
+      sameTierAvgPrice,
+      divergencePercent,
+      message: triggered
+        ? `Winning price is ${Math.abs(divergencePercent)}% ${divergencePercent < 0 ? 'below' : 'above'} the average of same-tier profiles ($${sameTierAvgPrice.toFixed(2)}). Review floor protection settings.`
+        : null,
+    };
+  } else {
+    marginInsight = {
+      triggered: false,
+      winningPrice: finalPrice,
+      sameTierAvgPrice: finalPrice,
+      divergencePercent: 0,
+      message: null,
+    };
+  }
+
+  const floorNote = floorApplied ? ` Floor applied: price raised from $${winner.computedPrice.toFixed(2)} to $${finalPrice.toFixed(2)}.` : '';
+  const reason = `Applied profile '${winner.profileName}' (Tier ${winner.tier} — ${winner.tierLabel}). ${matchingProfiles.length} profile${matchingProfiles.length > 1 ? 's' : ''} matched.${floorNote}`;
 
   logger.info('Exit: resolvePrice service — success');
   return {
     productId: product.id,
     productTitle: product.title,
     basePrice: product.basePrice,
-    newPrice: winner.computedPrice,
-    appliedProfile: { id: winner.id, name: winner.name },
+    finalPrice,
+    appliedProfile: { id: winner.profileId, name: winner.profileName },
     tier: winner.tier,
     tierLabel: winner.tierLabel,
     reason,
-    candidateProfiles: candidatesWithTier,
-    rejectedProfiles,
+    costPrice: product.costPrice ?? null,
+    minMarginPercent: product.minMarginPercent ?? null,
+    floorPrice,
+    floorApplied,
+    waterfall,
+    marginInsight,
   };
 };
 

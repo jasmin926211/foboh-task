@@ -1,8 +1,8 @@
 import { Bell, HelpCircle } from "lucide-react";
 
-const USER_NAME = "####";
-const USER_FULL_NAME = "####";
-const COMPANY_NAME = "####";
+const USER_NAME = "Jasmin";
+const USER_FULL_NAME = "Jasmin Thummar";
+const COMPANY_NAME = "FOBOH Supplier";
 
 export function TopBar() {
   const today = new Date().toLocaleDateString("en-US", {

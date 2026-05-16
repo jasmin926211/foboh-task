@@ -5,3 +5,4 @@ export const ADJUSTMENT_DIRECTION = { INCREASE: 'increase', DECREASE: 'decrease'
 export const PAGINATION = { DEFAULT_PAGE: 1, DEFAULT_LIMIT: 10 } as const;
 export const PERCENTAGE_DIVISOR = 100;
 export const DEFAULT_PORT = 5000;
+export const MARGIN_MULTIPLIER_BASE = 1;

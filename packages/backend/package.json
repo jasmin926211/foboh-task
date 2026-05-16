@@ -10,7 +10,8 @@
     "db:seed": "npx prisma db seed",
     "db:studio": "npx prisma studio",
     "db:generate": "npx prisma generate",
-    "format": "prettier --write \"src/**/*.{ts,js,json}\""
+    "format": "prettier --write \"src/**/*.{ts,js,json}\"",
+    "test": "vitest run"
   },
   "prisma": {
     "schema": "src/prisma/schema.prisma",
@@ -39,6 +40,7 @@
     "prettier": "^3.8.3",
     "prisma": "^7.8.0",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.6"
   }
 }
