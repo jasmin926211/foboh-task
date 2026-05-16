@@ -8,6 +8,8 @@ import { SetProductPricing } from '@/components/pricing/SetProductPricing';
 import { AssignCustomers } from '@/components/pricing/AssignCustomers';
 import type { TargetType } from '@/components/pricing/AssignCustomers';
 import { useProfile, useCreateProfile, useUpdateProfile } from '@/hooks/usePricingProfiles';
+import { ROUTES } from '@/lib/routes';
+import type { CreateProfilePayload, UpdateProfilePayload } from '@/types';
 import axios from 'axios';
 
 export function SetupPage() {
@@ -106,41 +108,31 @@ export function SetupPage() {
     const effectiveScope = isCustom ? 'selected' : scope;
 
     try {
-      const payload: Record<string, unknown> = {
+      const base = {
         name: profileName.trim(),
         adjustmentType,
         status,
         scope: effectiveScope,
         ...(effectiveScope === 'selected' && { productIds: Array.from(selectedProductIds) }),
+        ...(targetType === 'customer' && { customerId }),
+        ...(targetType === 'group' && { customerGroupId }),
+        ...(isCustom
+          ? { customPrices }
+          : { adjustmentDirection, adjustmentValue }),
       };
 
-      // Set targeting
-      if (targetType === 'customer') {
-        payload.customerId = customerId;
-      } else if (targetType === 'group') {
-        payload.customerGroupId = customerGroupId;
-      }
-      // If 'all', both stay undefined/null
-
-      if (isCustom) {
-        payload.customPrices = customPrices;
-      } else {
-        payload.adjustmentDirection = adjustmentDirection;
-        payload.adjustmentValue = adjustmentValue;
-      }
-
       if (isEditMode && id) {
-        await updateMutation.mutateAsync({ id, payload: payload as any });
+        await updateMutation.mutateAsync({ id, payload: base as UpdateProfilePayload });
         toast.success('Profile updated successfully');
       } else {
-        await createMutation.mutateAsync(payload as any);
+        await createMutation.mutateAsync(base as CreateProfilePayload);
         toast.success(
           status === 'draft'
             ? 'Profile saved as draft'
             : 'Profile published successfully'
         );
       }
-      navigate('/pricing/profiles');
+      navigate(ROUTES.PRICING_PROFILES);
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 409) {
         toast.error(err.response.data?.error?.description || 'A profile with this name already exists');
@@ -205,7 +197,7 @@ export function SetupPage() {
         <div className="flex items-center gap-4">
           <button
             className="text-sm font-medium text-ink-700 hover:text-ink-900"
-            onClick={() => navigate('/pricing/profiles')}
+            onClick={() => navigate(ROUTES.PRICING_PROFILES)}
           >
             Cancel
           </button>

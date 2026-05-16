@@ -2,7 +2,9 @@ import prisma from '../../prisma/client';
 import logger from '../../utilities/logger';
 import { ResourceNotFoundException, NegativePriceException, ConflictException } from '../../utilities/exceptions';
 import computePrice from '../../utilities/computePrice';
+import findOrThrow from '../../utilities/findOrThrow';
 import { CreateProfileBody, UpdateProfileBody, PreviewPricesBody } from '../../policies/pricingProfile';
+import { PROFILE_SCOPE, PROFILE_STATUS, ADJUSTMENT_TYPE, PAGINATION, PERCENTAGE_DIVISOR } from '../../constants';
 
 // --- Helper: validate that no computed prices are negative ---
 
@@ -77,9 +79,9 @@ export const checkProfileNameExists = async (name: string, excludeId?: string): 
 export const createProfile = async (body: CreateProfileBody) => {
   logger.info('Entry: createProfile service');
 
-  const scope = body.scope ?? 'selected';
-  const status = body.status ?? 'draft';
-  const isCustom = body.adjustmentType === 'custom';
+  const scope = body.scope ?? PROFILE_SCOPE.SELECTED;
+  const status = body.status ?? PROFILE_STATUS.DRAFT;
+  const isCustom = body.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
 
   // Check for duplicate profile name
   const existing = await prisma.pricingProfile.findFirst({
@@ -108,7 +110,7 @@ export const createProfile = async (body: CreateProfileBody) => {
       adjustmentValue: isCustom ? null : (body.adjustmentValue ?? null),
       status,
       scope,
-      ...(scope === 'selected' && body.productIds && {
+      ...(scope === PROFILE_SCOPE.SELECTED && body.productIds && {
         profileProducts: {
           create: body.productIds.map((productId) => ({
             productId,
@@ -133,8 +135,8 @@ export const createProfile = async (body: CreateProfileBody) => {
 export const listProfiles = async (
   search?: string,
   status?: 'draft' | 'published',
-  page: number = 1,
-  limit: number = 10,
+  page: number = PAGINATION.DEFAULT_PAGE,
+  limit: number = PAGINATION.DEFAULT_LIMIT,
 ) => {
   logger.info('Entry: listProfiles service');
 
@@ -172,24 +174,24 @@ export const listProfiles = async (
 export const getProfile = async (id: string) => {
   logger.info('Entry: getProfile service');
 
-  const profile = await prisma.pricingProfile.findUnique({
-    where: { id },
-    include: {
-      profileProducts: { include: { product: true } },
-      customer: true,
-      customerGroup: true,
-    },
-  });
+  const profile = await findOrThrow(
+    prisma.pricingProfile.findUnique({
+      where: { id },
+      include: {
+        profileProducts: { include: { product: true } },
+        customer: true,
+        customerGroup: true,
+      },
+    }),
+    'Pricing profile',
+    id,
+  );
 
-  if (!profile) {
-    throw new ResourceNotFoundException(`Pricing profile with id ${id} not found`);
-  }
-
-  const isCustom = profile.adjustmentType === 'custom';
+  const isCustom = profile.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
 
   let products: { id: string; title: string; sku: string; basePrice: number }[];
 
-  if (profile.scope === 'all') {
+  if (profile.scope === PROFILE_SCOPE.ALL) {
     const allProducts = await prisma.product.findMany({ where: { deletedAt: null } });
     products = allProducts;
   } else {
@@ -228,14 +230,15 @@ export const getProfile = async (id: string) => {
 export const updateProfile = async (id: string, body: UpdateProfileBody) => {
   logger.info('Entry: updateProfile service');
 
-  const existing = await prisma.pricingProfile.findUnique({ where: { id } });
-  if (!existing) {
-    throw new ResourceNotFoundException(`Pricing profile with id ${id} not found`);
-  }
+  const existing = await findOrThrow(
+    prisma.pricingProfile.findUnique({ where: { id } }),
+    'Pricing profile',
+    id,
+  );
 
   const effectiveScope = (body.scope ?? existing.scope) as 'all' | 'selected';
   const effectiveAdjType = (body.adjustmentType ?? existing.adjustmentType) as 'fixed' | 'dynamic' | 'custom';
-  const isCustom = effectiveAdjType === 'custom';
+  const isCustom = effectiveAdjType === ADJUSTMENT_TYPE.CUSTOM;
 
   if (!isCustom) {
     const effectiveAdjDir = (body.adjustmentDirection ?? existing.adjustmentDirection) as 'increase' | 'decrease';
@@ -265,16 +268,8 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
   }
 
   let profileProductsUpdate: any = undefined;
-  if (body.scope === 'all' && existing.scope !== 'all') {
+  if (body.scope === PROFILE_SCOPE.ALL && existing.scope !== PROFILE_SCOPE.ALL) {
     profileProductsUpdate = { deleteMany: {} };
-  } else if (body.scope === 'selected' && existing.scope === 'all' && productIds) {
-    profileProductsUpdate = {
-      deleteMany: {},
-      create: productIds.map((productId) => ({
-        productId,
-        ...(isCustom && customPrices && { customPrice: customPrices[productId] ?? null }),
-      })),
-    };
   } else if (productIds) {
     profileProductsUpdate = {
       deleteMany: {},
@@ -307,10 +302,7 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
 export const deleteProfile = async (id: string) => {
   logger.info('Entry: deleteProfile service');
 
-  const existing = await prisma.pricingProfile.findUnique({ where: { id } });
-  if (!existing) {
-    throw new ResourceNotFoundException(`Pricing profile with id ${id} not found`);
-  }
+  await findOrThrow(prisma.pricingProfile.findUnique({ where: { id } }), 'Pricing profile', id);
 
   await prisma.pricingProfile.delete({ where: { id } });
 
@@ -336,13 +328,13 @@ function computeTier(profile: {
   matchedViaGroup?: boolean;
 }): number {
   if (profile.customerId) {
-    return profile.scope === 'selected' ? 1 : 2;
+    return profile.scope === PROFILE_SCOPE.SELECTED ? 1 : 2;
   }
   if (profile.customerGroupId) {
-    return profile.scope === 'selected' ? 3 : 4;
+    return profile.scope === PROFILE_SCOPE.SELECTED ? 3 : 4;
   }
   // All customers
-  return profile.scope === 'selected' ? 5 : 6;
+  return profile.scope === PROFILE_SCOPE.SELECTED ? 5 : 6;
 }
 
 // --- Resolve Price (single product) with 6-tier specificity ---
@@ -384,7 +376,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
   // Find all published profiles that could apply
   const profiles = await prisma.pricingProfile.findMany({
     where: {
-      status: 'published',
+      status: PROFILE_STATUS.PUBLISHED,
       OR: [
         { customerId },
         ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
@@ -400,7 +392,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
 
   // Filter to profiles that cover this product
   const matchingProfiles = profiles.filter((p) => {
-    if (p.scope === 'all') return true;
+    if (p.scope === PROFILE_SCOPE.ALL) return true;
     return p.profileProducts.length > 0;
   });
 
@@ -408,7 +400,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
     // Check for rejected draft profiles
     const draftProfiles = await prisma.pricingProfile.findMany({
       where: {
-        status: 'draft',
+        status: PROFILE_STATUS.DRAFT,
         AND: [
           {
             OR: [
@@ -419,7 +411,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
           },
           {
             OR: [
-              { scope: 'all' },
+              { scope: PROFILE_SCOPE.ALL },
               { profileProducts: { some: { productId } } },
             ],
           },
@@ -449,7 +441,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
 
   // Compute tier for each matching profile, then compute price
   const candidatesWithTier = matchingProfiles.map((p) => {
-    const isCustom = p.adjustmentType === 'custom';
+    const isCustom = p.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
     const junctionRow = p.profileProducts[0];
     const computedNewPrice = isCustom
       ? (junctionRow?.customPrice ?? product.basePrice)
@@ -493,7 +485,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
   // Find rejected draft profiles
   const draftProfiles = await prisma.pricingProfile.findMany({
     where: {
-      status: 'draft',
+      status: PROFILE_STATUS.DRAFT,
       OR: [
         { customerId },
         ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
@@ -502,13 +494,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
     },
   });
 
-  const rejectedProfiles = draftProfiles
-    .filter((p) => {
-      if (p.scope === 'all') return true;
-      // Check if draft profile covers this product - we need to query
-      return true; // Include all drafts as potentially relevant
-    })
-    .map((p) => ({
+  const rejectedProfiles = draftProfiles.map((p) => ({
       id: p.id,
       name: p.name,
       rejectionReason: 'Profile is in draft status',
@@ -554,11 +540,11 @@ export const resolveAllPrices = async (customerId: string) => {
 export const previewPrices = async (body: PreviewPricesBody) => {
   logger.info('Entry: previewPrices service');
 
-  const scope = body.scope ?? 'selected';
-  const isCustom = body.adjustmentType === 'custom';
+  const scope = body.scope ?? PROFILE_SCOPE.SELECTED;
+  const isCustom = body.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
 
   const products =
-    scope === 'all'
+    scope === PROFILE_SCOPE.ALL
       ? await prisma.product.findMany({ where: { deletedAt: null }, orderBy: { title: 'asc' } })
       : await prisma.product.findMany({
           where: { id: { in: body.productIds ?? [] }, deletedAt: null },
@@ -581,9 +567,9 @@ export const previewPrices = async (body: PreviewPricesBody) => {
         adjustmentValue: body.adjustmentValue,
       });
       adjustmentAmount =
-        body.adjustmentType === 'fixed'
+        body.adjustmentType === ADJUSTMENT_TYPE.FIXED
           ? (body.adjustmentValue ?? 0)
-          : (product.basePrice * (body.adjustmentValue ?? 0)) / 100;
+          : (product.basePrice * (body.adjustmentValue ?? 0)) / PERCENTAGE_DIVISOR;
     }
 
     if (newPrice < 0) {

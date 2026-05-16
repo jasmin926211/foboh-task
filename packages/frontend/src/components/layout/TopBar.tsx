@@ -1,12 +1,23 @@
-import { Bell, HelpCircle } from 'lucide-react';
+import { Bell, HelpCircle } from "lucide-react";
+
+const USER_NAME = "####";
+const USER_FULL_NAME = "####";
+const COMPANY_NAME = "####";
 
 export function TopBar() {
+  const today = new Date().toLocaleDateString("en-US", {
+    weekday: "short",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+
   return (
     <header className="fixed top-0 left-[240px] right-0 h-20 bg-teal z-30 flex items-center justify-between px-8">
       {/* Left - Greeting */}
       <div>
-        <h2 className="text-lg font-semibold text-white">Hello, Ekemini</h2>
-        <p className="text-[13px] font-normal text-white/80">Tue, 13 February 2024</p>
+        <h2 className="text-lg font-semibold text-white">Hello, {USER_NAME}</h2>
+        <p className="text-[13px] font-normal text-white/80">{today}</p>
       </div>
 
       {/* Right - Actions */}
@@ -19,14 +30,14 @@ export function TopBar() {
         </button>
 
         <div className="text-right">
-          <p className="text-sm font-semibold text-white">Ekemini Mark</p>
-          <p className="text-xs text-white/80">Heaps Normal</p>
+          <p className="text-sm font-semibold text-white">{USER_FULL_NAME}</p>
+          <p className="text-xs text-white/80">{COMPANY_NAME}</p>
         </div>
 
         <div
           className="h-10 w-10 rounded-full"
           style={{
-            background: `repeating-conic-gradient(#333 0% 25%, #fff 0% 50%) 50% / 10px 10px`
+            background: `repeating-conic-gradient(#333 0% 25%, #fff 0% 50%) 50% / 10px 10px`,
           }}
         />
       </div>

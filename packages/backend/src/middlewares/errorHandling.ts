@@ -1,20 +1,36 @@
 import { Request, Response, NextFunction } from 'express';
 import logger from '../utilities/logger';
 
-const errorHandling = (err: any, _req: Request, res: Response, _next: NextFunction) => {
-  if (err.statusCode && err.title) {
+interface AppError {
+  statusCode: number;
+  title: string;
+  description?: string;
+  products?: unknown;
+}
+
+const isAppError = (err: unknown): err is AppError =>
+  typeof err === 'object' &&
+  err !== null &&
+  'statusCode' in err &&
+  'title' in err &&
+  typeof (err as AppError).statusCode === 'number' &&
+  typeof (err as AppError).title === 'string';
+
+const errorHandling = (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  if (isAppError(err)) {
     logger.error(`Handled error: ${err.title} - ${err.description}`);
     res.status(err.statusCode).json({
       error: {
         title: err.title,
         description: err.description,
-        ...(err.products && { products: err.products }),
+        ...('products' in err && err.products ? { products: err.products } : {}),
       },
     });
     return;
   }
 
-  logger.error(`Unhandled error: ${err.stack || err.message || err}`);
+  const message = err instanceof Error ? err.stack || err.message : String(err);
+  logger.error(`Unhandled error: ${message}`);
   res.status(500).json({
     error: {
       title: 'Internal server error',

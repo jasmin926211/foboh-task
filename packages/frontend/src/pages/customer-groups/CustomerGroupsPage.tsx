@@ -134,6 +134,11 @@ export function CustomerGroupsPage() {
         <TextInput placeholder="Search groups..." value={searchFilter} onChange={setSearchFilter} />
       </div>
 
+      {/* Results count */}
+      <p className="mb-4 text-[13px] text-ink-500">
+        Showing <span className="font-semibold text-ink-900">{groups.length}</span> groups
+      </p>
+
       {/* Table */}
       <div className="rounded-card border border-surface-border-soft bg-white">
         {isLoading ? (
@@ -224,7 +229,7 @@ export function CustomerGroupsPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full rounded-input border border-surface-border px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+                  className="h-11 w-full rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
                   placeholder="Group name"
                 />
               </div>
@@ -233,7 +238,7 @@ export function CustomerGroupsPage() {
                 <textarea
                   value={formDescription}
                   onChange={(e) => setFormDescription(e.target.value)}
-                  className="w-full rounded-input border border-surface-border px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+                  className="h-11 w-full rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
                   placeholder="Optional description"
                   rows={3}
                 />
@@ -269,7 +274,7 @@ export function CustomerGroupsPage() {
                 <select
                   value={addCustomerId}
                   onChange={(e) => setAddCustomerId(e.target.value)}
-                  className="w-full rounded-input border border-surface-border px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+                  className="h-11 w-full rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
                 >
                   <option value="">Select a customer...</option>
                   {availableCustomers.map((c) => (
@@ -315,7 +320,7 @@ export function CustomerGroupsPage() {
               )}
             </div>
 
-            <div className="mt-4 flex justify-end">
+            <div className="mt-6 flex justify-end">
               <PillButton variant="secondary" onClick={() => setManagingGroupId(null)}>Done</PillButton>
             </div>
           </div>

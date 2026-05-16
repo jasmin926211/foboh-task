@@ -1,105 +1,51 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import { validateRequest } from '../../middlewares';
 import * as policies from '../../policies/customerGroup';
 import * as groupServices from '../../services/customerGroup';
-import logger from '../../utilities/logger';
+import wrapController from '../../utilities/controllerWrapper';
 
 const router = Router();
 
-const createController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: createCustomerGroupController');
-  try {
-    const group = await groupServices.createCustomerGroup(req.body);
-    logger.info('Exit: createCustomerGroupController — success');
-    res.status(201).json(group);
-  } catch (error) {
-    logger.error(`Exit: createCustomerGroupController — error: ${error}`);
-    next(error);
-  }
-};
+const createCustomerGroupController = wrapController('createCustomerGroupController', async (req) => ({
+  status: 201,
+  data: await groupServices.createCustomerGroup(req.body),
+}));
 
-const listController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: listCustomerGroupsController');
-  try {
-    const groups = await groupServices.listCustomerGroups(req.query.search as string | undefined);
-    logger.info('Exit: listCustomerGroupsController — success');
-    res.json(groups);
-  } catch (error) {
-    logger.error(`Exit: listCustomerGroupsController — error: ${error}`);
-    next(error);
-  }
-};
+const listCustomerGroupsController = wrapController('listCustomerGroupsController', async (req) => ({
+  data: await groupServices.listCustomerGroups(req.query.search as string | undefined),
+}));
 
-const getController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: getCustomerGroupController');
-  try {
-    const group = await groupServices.getCustomerGroup(req.params.id as string);
-    logger.info('Exit: getCustomerGroupController — success');
-    res.json(group);
-  } catch (error) {
-    logger.error(`Exit: getCustomerGroupController — error: ${error}`);
-    next(error);
-  }
-};
+const getCustomerGroupController = wrapController('getCustomerGroupController', async (req) => ({
+  data: await groupServices.getCustomerGroup(req.params.id as string),
+}));
 
-const updateController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: updateCustomerGroupController');
-  try {
-    const group = await groupServices.updateCustomerGroup(req.params.id as string, req.body);
-    logger.info('Exit: updateCustomerGroupController — success');
-    res.json(group);
-  } catch (error) {
-    logger.error(`Exit: updateCustomerGroupController — error: ${error}`);
-    next(error);
-  }
-};
+const updateCustomerGroupController = wrapController('updateCustomerGroupController', async (req) => ({
+  data: await groupServices.updateCustomerGroup(req.params.id as string, req.body),
+}));
 
-const deleteController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: deleteCustomerGroupController');
-  try {
-    const result = await groupServices.deleteCustomerGroup(req.params.id as string);
-    logger.info('Exit: deleteCustomerGroupController — success');
-    res.json(result);
-  } catch (error) {
-    logger.error(`Exit: deleteCustomerGroupController — error: ${error}`);
-    next(error);
-  }
-};
+const deleteCustomerGroupController = wrapController('deleteCustomerGroupController', async (req) => ({
+  data: await groupServices.deleteCustomerGroup(req.params.id as string),
+}));
 
-const addMemberController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: addMemberController');
-  try {
-    const membership = await groupServices.addMember(req.params.id as string, req.body.customerId);
-    logger.info('Exit: addMemberController — success');
-    res.status(201).json(membership);
-  } catch (error) {
-    logger.error(`Exit: addMemberController — error: ${error}`);
-    next(error);
-  }
-};
+const addMemberController = wrapController('addMemberController', async (req) => ({
+  status: 201,
+  data: await groupServices.addMember(req.params.id as string, req.body.customerId),
+}));
 
-const removeMemberController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: removeMemberController');
-  try {
-    const result = await groupServices.removeMember(req.params.id as string, req.params.customerId as string);
-    logger.info('Exit: removeMemberController — success');
-    res.json(result);
-  } catch (error) {
-    logger.error(`Exit: removeMemberController — error: ${error}`);
-    next(error);
-  }
-};
+const removeMemberController = wrapController('removeMemberController', async (req) => ({
+  data: await groupServices.removeMember(req.params.id as string, req.params.customerId as string),
+}));
 
 router
   .route('/')
-  .post(validateRequest(policies.createCustomerGroupPolicy), createController)
-  .get(validateRequest(policies.listCustomerGroupsPolicy), listController);
+  .post(validateRequest(policies.createCustomerGroupPolicy), createCustomerGroupController)
+  .get(validateRequest(policies.listCustomerGroupsPolicy), listCustomerGroupsController);
 
 router
   .route('/:id')
-  .get(validateRequest(policies.getCustomerGroupPolicy), getController)
-  .put(validateRequest(policies.updateCustomerGroupPolicy), updateController)
-  .delete(validateRequest(policies.deleteCustomerGroupPolicy), deleteController);
+  .get(validateRequest(policies.getCustomerGroupPolicy), getCustomerGroupController)
+  .put(validateRequest(policies.updateCustomerGroupPolicy), updateCustomerGroupController)
+  .delete(validateRequest(policies.deleteCustomerGroupPolicy), deleteCustomerGroupController);
 
 router
   .route('/:id/members')

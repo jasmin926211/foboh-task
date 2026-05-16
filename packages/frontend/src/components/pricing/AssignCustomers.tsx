@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Users, User, UsersRound } from 'lucide-react';
 import { SectionCard } from './SectionCard';
 import { useCustomers } from '@/hooks/useCustomers';

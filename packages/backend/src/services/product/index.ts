@@ -1,6 +1,6 @@
 import prisma from '../../prisma/client';
 import logger from '../../utilities/logger';
-import { ResourceNotFoundException } from '../../utilities/exceptions';
+import findOrThrow from '../../utilities/findOrThrow';
 
 export const listProducts = async (filters: {
   search?: string;
@@ -31,11 +31,7 @@ export const listProducts = async (filters: {
 export const getProduct = async (id: string) => {
   logger.info('Entry: getProduct service');
 
-  const product = await prisma.product.findUnique({ where: { id } });
-
-  if (!product) {
-    throw new ResourceNotFoundException(`Product with id ${id} not found`);
-  }
+  const product = await findOrThrow(prisma.product.findUnique({ where: { id } }), 'Product', id);
 
   logger.info('Exit: getProduct service — success');
   return product;
@@ -44,10 +40,7 @@ export const getProduct = async (id: string) => {
 export const softDeleteProduct = async (id: string) => {
   logger.info('Entry: softDeleteProduct service');
 
-  const product = await prisma.product.findUnique({ where: { id } });
-  if (!product) {
-    throw new ResourceNotFoundException(`Product with id ${id} not found`);
-  }
+  await findOrThrow(prisma.product.findUnique({ where: { id } }), 'Product', id);
 
   const updated = await prisma.product.update({
     where: { id },

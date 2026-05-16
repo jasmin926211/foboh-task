@@ -7,10 +7,11 @@ import {
   addGroupMember,
   removeGroupMember,
 } from '@/api/customerGroups';
+import { QUERY_KEYS } from '@/lib/queryKeys';
 
 export function useCustomerGroups(search?: string) {
   return useQuery({
-    queryKey: ['customer-groups', search],
+    queryKey: [QUERY_KEYS.CUSTOMER_GROUPS, search],
     queryFn: () => fetchCustomerGroups(search),
   });
 }
@@ -20,7 +21,7 @@ export function useCreateCustomerGroup() {
   return useMutation({
     mutationFn: (payload: { name: string; description?: string }) => createCustomerGroup(payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-groups'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMER_GROUPS] });
     },
   });
 }
@@ -31,7 +32,7 @@ export function useUpdateCustomerGroup() {
     mutationFn: ({ id, payload }: { id: string; payload: { name?: string; description?: string | null } }) =>
       updateCustomerGroup(id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-groups'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMER_GROUPS] });
     },
   });
 }
@@ -41,7 +42,7 @@ export function useDeleteCustomerGroup() {
   return useMutation({
     mutationFn: (id: string) => deleteCustomerGroup(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-groups'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMER_GROUPS] });
     },
   });
 }
@@ -52,8 +53,8 @@ export function useAddGroupMember() {
     mutationFn: ({ groupId, customerId }: { groupId: string; customerId: string }) =>
       addGroupMember(groupId, customerId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-groups'] });
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMER_GROUPS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMERS] });
     },
   });
 }
@@ -64,8 +65,8 @@ export function useRemoveGroupMember() {
     mutationFn: ({ groupId, customerId }: { groupId: string; customerId: string }) =>
       removeGroupMember(groupId, customerId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['customer-groups'] });
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMER_GROUPS] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEYS.CUSTOMERS] });
     },
   });
 }

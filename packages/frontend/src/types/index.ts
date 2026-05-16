@@ -99,6 +99,27 @@ export interface ResolvedPrice {
   }[];
 }
 
+export interface PaginatedProfiles {
+  data: PricingProfile[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface UpdateProfilePayload {
+  name?: string;
+  customerId?: string | null;
+  customerGroupId?: string | null;
+  adjustmentType?: 'fixed' | 'dynamic' | 'custom';
+  adjustmentDirection?: 'increase' | 'decrease' | null;
+  adjustmentValue?: number | null;
+  status?: 'draft' | 'published';
+  scope?: 'all' | 'selected';
+  productIds?: string[];
+  customPrices?: Record<string, number>;
+}
+
 export interface CreateProfilePayload {
   name: string;
   customerId?: string;

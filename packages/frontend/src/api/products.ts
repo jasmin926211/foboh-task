@@ -1,5 +1,6 @@
 import apiClient from '@/lib/client';
-import type { Product } from '../types';
+import { API_ENDPOINTS } from '@/lib/apiEndpoints';
+import type { Product } from '@/types';
 
 export const fetchProducts = async (params?: {
   search?: string;
@@ -7,11 +8,11 @@ export const fetchProducts = async (params?: {
   segment?: string;
   brand?: string;
 }): Promise<Product[]> => {
-  const { data } = await apiClient.get('/products', { params });
+  const { data } = await apiClient.get(API_ENDPOINTS.PRODUCTS, { params });
   return data;
 };
 
 export const fetchProduct = async (id: string): Promise<Product> => {
-  const { data } = await apiClient.get(`/products/${id}`);
+  const { data } = await apiClient.get(`${API_ENDPOINTS.PRODUCTS}/${id}`);
   return data;
 };

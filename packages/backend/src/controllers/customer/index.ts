@@ -1,70 +1,31 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router } from 'express';
 import { validateRequest } from '../../middlewares';
 import * as policies from '../../policies/customer';
 import * as customerServices from '../../services/customer';
-import logger from '../../utilities/logger';
+import wrapController from '../../utilities/controllerWrapper';
 
 const router = Router();
 
-const createCustomerController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: createCustomerController');
-  try {
-    const customer = await customerServices.createCustomer(req.body);
-    logger.info('Exit: createCustomerController — success');
-    res.status(201).json(customer);
-  } catch (error) {
-    logger.error(`Exit: createCustomerController — error: ${error}`);
-    next(error);
-  }
-};
+const createCustomerController = wrapController('createCustomerController', async (req) => ({
+  status: 201,
+  data: await customerServices.createCustomer(req.body),
+}));
 
-const listCustomersController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: listCustomersController');
-  try {
-    const customers = await customerServices.listCustomers(req.query.search as string | undefined);
-    logger.info('Exit: listCustomersController — success');
-    res.json(customers);
-  } catch (error) {
-    logger.error(`Exit: listCustomersController — error: ${error}`);
-    next(error);
-  }
-};
+const listCustomersController = wrapController('listCustomersController', async (req) => ({
+  data: await customerServices.listCustomers(req.query.search as string | undefined),
+}));
 
-const getCustomerController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: getCustomerController');
-  try {
-    const customer = await customerServices.getCustomer(req.params.id as string);
-    logger.info('Exit: getCustomerController — success');
-    res.json(customer);
-  } catch (error) {
-    logger.error(`Exit: getCustomerController — error: ${error}`);
-    next(error);
-  }
-};
+const getCustomerController = wrapController('getCustomerController', async (req) => ({
+  data: await customerServices.getCustomer(req.params.id as string),
+}));
 
-const updateCustomerController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: updateCustomerController');
-  try {
-    const customer = await customerServices.updateCustomer(req.params.id as string, req.body);
-    logger.info('Exit: updateCustomerController — success');
-    res.json(customer);
-  } catch (error) {
-    logger.error(`Exit: updateCustomerController — error: ${error}`);
-    next(error);
-  }
-};
+const updateCustomerController = wrapController('updateCustomerController', async (req) => ({
+  data: await customerServices.updateCustomer(req.params.id as string, req.body),
+}));
 
-const deleteCustomerController = async (req: Request, res: Response, next: NextFunction) => {
-  logger.info('Entry: deleteCustomerController');
-  try {
-    const result = await customerServices.deleteCustomer(req.params.id as string);
-    logger.info('Exit: deleteCustomerController — success');
-    res.json(result);
-  } catch (error) {
-    logger.error(`Exit: deleteCustomerController — error: ${error}`);
-    next(error);
-  }
-};
+const deleteCustomerController = wrapController('deleteCustomerController', async (req) => ({
+  data: await customerServices.deleteCustomer(req.params.id as string),
+}));
 
 router
   .route('/')

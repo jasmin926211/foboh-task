@@ -94,6 +94,11 @@ export function CustomersPage() {
         />
       </div>
 
+      {/* Results count */}
+      <p className="mb-4 text-[13px] text-ink-500">
+        Showing <span className="font-semibold text-ink-900">{customers.length}</span> customers
+      </p>
+
       {/* Table */}
       <div className="rounded-card border border-surface-border-soft bg-white">
         {isLoading ? (
@@ -132,7 +137,7 @@ export function CustomersPage() {
                     <div className="flex flex-wrap gap-1">
                       {customer.memberships && customer.memberships.length > 0 ? (
                         customer.memberships.map((m) => (
-                          <span key={m.id} className="rounded-pill bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">
+                          <span key={m.id} className="rounded-pill bg-purple-50 px-2.5 py-1 text-xs font-medium text-purple-700">
                             {m.customerGroup?.name}
                           </span>
                         ))
@@ -188,7 +193,7 @@ export function CustomersPage() {
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
-                  className="w-full rounded-input border border-surface-border px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+                  className="h-11 w-full rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
                   placeholder="Customer name"
                 />
               </div>
@@ -198,7 +203,7 @@ export function CustomersPage() {
                   type="email"
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
-                  className="w-full rounded-input border border-surface-border px-3 py-2 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
+                  className="h-11 w-full rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
                   placeholder="customer@example.com"
                 />
               </div>

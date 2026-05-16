@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
-import { useProfiles } from '@/hooks/usePricingProfiles';
-import { deleteProfile, updateProfile } from '@/api/pricingProfiles';
-import { useQueryClient } from '@tanstack/react-query';
+import { useProfiles, useDeleteProfile, useUpdateProfile } from '@/hooks/usePricingProfiles';
 import { PillButton } from '@/components/pricing/PillButton';
 import { TextInput } from '@/components/pricing/TextInput';
+import { SelectInput } from '@/components/pricing/SelectInput';
 import { useDebounce } from '@/hooks/useDebounce';
+import { ROUTES } from '@/lib/routes';
 import type { PricingProfile } from '@/types';
 import axios from 'axios';
 
@@ -15,7 +15,6 @@ const PAGE_SIZE = 10;
 
 export function ProfilesPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [searchFilter, setSearchFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'draft' | 'published' | ''>('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -31,6 +30,9 @@ export function ProfilesPage() {
     PAGE_SIZE,
   );
 
+  const deleteMutation = useDeleteProfile();
+  const updateMutation = useUpdateProfile();
+
   const profiles = result?.data ?? [];
   const total = result?.total ?? 0;
   const totalPages = result?.totalPages ?? 1;
@@ -40,8 +42,7 @@ export function ProfilesPage() {
 
     setDeletingId(profile.id);
     try {
-      await deleteProfile(profile.id);
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      await deleteMutation.mutateAsync(profile.id);
       toast.success(`"${profile.name}" deleted`);
     } catch {
       toast.error('Failed to delete profile');
@@ -54,8 +55,7 @@ export function ProfilesPage() {
     const newStatus = profile.status === 'published' ? 'draft' : 'published';
     setTogglingId(profile.id);
     try {
-      await updateProfile(profile.id, { status: newStatus });
-      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      await updateMutation.mutateAsync({ id: profile.id, payload: { status: newStatus } });
       toast.success(`"${profile.name}" ${newStatus === 'published' ? 'published' : 'unpublished'}`);
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 422) {
@@ -113,7 +113,7 @@ export function ProfilesPage() {
         <PillButton
           variant="primary"
           icon={<Plus className="h-4 w-4" />}
-          onClick={() => navigate('/pricing/setup')}
+          onClick={() => navigate(ROUTES.PRICING_SETUP)}
         >
           Create Profile
         </PillButton>
@@ -128,15 +128,17 @@ export function ProfilesPage() {
             onChange={(val) => { setSearchFilter(val); setCurrentPage(1); }}
           />
         </div>
-        <select
+        <SelectInput
+          placeholder="All Statuses"
           value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value as '' | 'draft' | 'published'); setCurrentPage(1); }}
-          className="h-11 rounded-input border border-surface-border bg-white px-3.5 text-sm text-ink-900 focus:outline-none focus:ring-1 focus:ring-teal/30"
-        >
-          <option value="">All Statuses</option>
-          <option value="draft">Draft</option>
-          <option value="published">Published</option>
-        </select>
+          options={[
+            { label: 'Draft', value: 'draft' },
+            { label: 'Published', value: 'published' },
+          ]}
+          onChange={(val) => { setStatusFilter(val as '' | 'draft' | 'published'); setCurrentPage(1); }}
+          className="w-44"
+          allowEmpty
+        />
       </div>
 
       {/* Results count */}
@@ -170,7 +172,7 @@ export function ProfilesPage() {
               variant="primary"
               className="mt-4"
               icon={<Plus className="h-4 w-4" />}
-              onClick={() => navigate('/pricing/setup')}
+              onClick={() => navigate(ROUTES.PRICING_SETUP)}
             >
               Create Your First Profile
             </PillButton>
@@ -255,7 +257,7 @@ export function ProfilesPage() {
                         )}
                       </button>
                       <button
-                        onClick={() => navigate(`/pricing/setup/${profile.id}`)}
+                        onClick={() => navigate(ROUTES.PRICING_SETUP_EDIT(profile.id))}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-surface-panel hover:text-ink-900"
                         title="Edit"
                       >

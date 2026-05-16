@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Search, Loader2 } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { Search, Loader2, X } from 'lucide-react';
 import { useProducts } from '@/hooks/useProducts';
 import { useDebounce } from '@/hooks/useDebounce';
 import { TextInput } from '@/components/pricing/TextInput';
@@ -13,6 +13,15 @@ export function ProductsPage() {
   const [brandFilter, setBrandFilter] = useState('');
 
   const debouncedSearch = useDebounce(search, 300);
+
+  const hasActiveFilters = !!search || !!categoryFilter || !!segmentFilter || !!brandFilter;
+
+  const clearFilters = useCallback(() => {
+    setSearch('');
+    setCategoryFilter('');
+    setSegmentFilter('');
+    setBrandFilter('');
+  }, []);
 
   const queryParams = useMemo(() => {
     const params: Record<string, string> = {};
@@ -42,7 +51,7 @@ export function ProductsPage() {
       </div>
 
       {/* Filters */}
-      <div className="mb-6 flex gap-3">
+      <div className="mb-6 flex items-end gap-4">
         <TextInput
           placeholder="Search by title or SKU..."
           value={search}
@@ -71,6 +80,15 @@ export function ProductsPage() {
           onChange={setBrandFilter}
           className="w-40"
         />
+        {hasActiveFilters && (
+          <button
+            onClick={clearFilters}
+            className="flex h-11 items-center gap-1.5 rounded-input border border-surface-border bg-white px-3 text-sm font-medium text-ink-500 hover:bg-surface-panel hover:text-ink-900 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+            Clear
+          </button>
+        )}
       </div>
 
       {/* Results count */}
@@ -112,7 +130,7 @@ export function ProductsPage() {
                   <td className="px-6 py-4 text-sm text-ink-700">{product.sku}</td>
                   <td className="px-6 py-4 text-sm text-ink-700">{product.subCategory}</td>
                   <td className="px-6 py-4">
-                    <span className="rounded-pill bg-[#EEF2FF] px-2.5 py-1 text-xs font-medium text-ink-900">
+                    <span className="rounded-pill bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
                       {product.segment}
                     </span>
                   </td>

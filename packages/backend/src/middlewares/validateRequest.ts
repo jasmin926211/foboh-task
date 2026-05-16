@@ -15,10 +15,21 @@ const validateRequest = (schemas: ValidationSchemas) => {
         req.body = schemas.body.parse(req.body);
       }
       if (schemas.query) {
-        schemas.query.parse({ ...req.query });
+        const parsed = schemas.query.parse({ ...req.query });
+        // req.query is read-only in Express 5 / newer router — mutate in place
+        const query = req.query;
+        for (const key of Object.keys(query)) {
+          delete query[key];
+        }
+        Object.assign(query, parsed);
       }
       if (schemas.params) {
-        schemas.params.parse({ ...req.params });
+        const parsed = schemas.params.parse({ ...req.params });
+        const params = req.params;
+        for (const key of Object.keys(params)) {
+          delete params[key];
+        }
+        Object.assign(params, parsed);
       }
       next();
     } catch (error: any) {

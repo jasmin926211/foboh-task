@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import { Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchResolvedPrices } from '@/api/pricingProfiles';
 import { useCustomers } from '@/hooks/useCustomers';
 import { PillButton } from '@/components/pricing/PillButton';
+import { QUERY_KEYS } from '@/lib/queryKeys';
 import type { ResolvedPrice } from '@/types';
 
 export function ResolvedPricesPage() {
@@ -14,7 +15,7 @@ export function ResolvedPricesPage() {
   const { data: customers = [] } = useCustomers();
 
   const { data: prices = [], isLoading, isError, isFetched } = useQuery({
-    queryKey: ['resolved-prices', resolvedCustomerId],
+    queryKey: [QUERY_KEYS.RESOLVED_PRICES, resolvedCustomerId],
     queryFn: () => fetchResolvedPrices(resolvedCustomerId),
     enabled: !!resolvedCustomerId,
   });
@@ -107,9 +108,8 @@ export function ResolvedPricesPage() {
                     const isExpanded = expandedProductId === price.productId;
 
                     return (
-                      <>
+                      <Fragment key={price.productId}>
                         <tr
-                          key={price.productId}
                           className={`border-b border-surface-border-soft last:border-b-0 hover:bg-surface-panel/50 ${hasProfile ? 'cursor-pointer' : ''}`}
                           onClick={() => hasProfile && setExpandedProductId(isExpanded ? null : price.productId)}
                         >
@@ -220,7 +220,7 @@ export function ResolvedPricesPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     );
                   })}
                 </tbody>

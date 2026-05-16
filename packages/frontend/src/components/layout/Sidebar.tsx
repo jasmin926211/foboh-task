@@ -11,6 +11,7 @@ import {
   Settings
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ROUTES } from '@/lib/routes';
 
 interface NavItem {
   label: string;
@@ -20,15 +21,15 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', icon: LayoutDashboard, href: '/dashboard' },
-  { label: 'Orders', icon: ShoppingCart, href: '/orders' },
-  { label: 'Customers', icon: Users, href: '/customers' },
-  { label: 'Customer Groups', icon: UsersRound, href: '/customer-groups' },
-  { label: 'Products', icon: Package, href: '/products' },
-  { label: 'Pricing', icon: Tag, href: '/pricing' },
-  { label: 'Freight', icon: Truck, href: '/freight', tag: 'NEW' },
-  { label: 'Integrations', icon: Puzzle, href: '/integrations' },
-  { label: 'Settings', icon: Settings, href: '/settings' },
+  { label: 'Dashboard', icon: LayoutDashboard, href: ROUTES.DASHBOARD },
+  { label: 'Orders', icon: ShoppingCart, href: ROUTES.ORDERS },
+  { label: 'Customers', icon: Users, href: ROUTES.CUSTOMERS },
+  { label: 'Customer Groups', icon: UsersRound, href: ROUTES.CUSTOMER_GROUPS },
+  { label: 'Products', icon: Package, href: ROUTES.PRODUCTS },
+  { label: 'Pricing', icon: Tag, href: ROUTES.PRICING },
+  { label: 'Freight', icon: Truck, href: ROUTES.FREIGHT, tag: 'NEW' },
+  { label: 'Integrations', icon: Puzzle, href: ROUTES.INTEGRATIONS },
+  { label: 'Settings', icon: Settings, href: ROUTES.SETTINGS },
 ];
 
 export function Sidebar() {

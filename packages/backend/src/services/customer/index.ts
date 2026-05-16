@@ -1,7 +1,10 @@
 import prisma from '../../prisma/client';
 import logger from '../../utilities/logger';
-import { ResourceNotFoundException, ConflictException } from '../../utilities/exceptions';
+import { ConflictException } from '../../utilities/exceptions';
+import findOrThrow from '../../utilities/findOrThrow';
 import { CreateCustomerBody, UpdateCustomerBody } from '../../policies/customer';
+
+const includeWithGroups = { memberships: { include: { customerGroup: true } } };
 
 export const createCustomer = async (body: CreateCustomerBody) => {
   logger.info('Entry: createCustomer service');
@@ -15,7 +18,7 @@ export const createCustomer = async (body: CreateCustomerBody) => {
 
   const customer = await prisma.customer.create({
     data: { name: body.name, email: body.email },
-    include: { memberships: { include: { customerGroup: true } } },
+    include: includeWithGroups,
   });
 
   logger.info('Exit: createCustomer service — success');
@@ -35,7 +38,7 @@ export const listCustomers = async (search?: string) => {
 
   const customers = await prisma.customer.findMany({
     where,
-    include: { memberships: { include: { customerGroup: true } } },
+    include: includeWithGroups,
     orderBy: { name: 'asc' },
   });
 
@@ -46,14 +49,11 @@ export const listCustomers = async (search?: string) => {
 export const getCustomer = async (id: string) => {
   logger.info('Entry: getCustomer service');
 
-  const customer = await prisma.customer.findUnique({
-    where: { id },
-    include: { memberships: { include: { customerGroup: true } } },
-  });
-
-  if (!customer) {
-    throw new ResourceNotFoundException(`Customer with id ${id} not found`);
-  }
+  const customer = await findOrThrow(
+    prisma.customer.findUnique({ where: { id }, include: includeWithGroups }),
+    'Customer',
+    id,
+  );
 
   logger.info('Exit: getCustomer service — success');
   return customer;
@@ -62,10 +62,7 @@ export const getCustomer = async (id: string) => {
 export const updateCustomer = async (id: string, body: UpdateCustomerBody) => {
   logger.info('Entry: updateCustomer service');
 
-  const existing = await prisma.customer.findUnique({ where: { id } });
-  if (!existing) {
-    throw new ResourceNotFoundException(`Customer with id ${id} not found`);
-  }
+  await findOrThrow(prisma.customer.findUnique({ where: { id } }), 'Customer', id);
 
   if (body.name) {
     const duplicate = await prisma.customer.findFirst({
@@ -79,7 +76,7 @@ export const updateCustomer = async (id: string, body: UpdateCustomerBody) => {
   const customer = await prisma.customer.update({
     where: { id },
     data: body,
-    include: { memberships: { include: { customerGroup: true } } },
+    include: includeWithGroups,
   });
 
   logger.info('Exit: updateCustomer service — success');
@@ -89,10 +86,7 @@ export const updateCustomer = async (id: string, body: UpdateCustomerBody) => {
 export const deleteCustomer = async (id: string) => {
   logger.info('Entry: deleteCustomer service');
 
-  const existing = await prisma.customer.findUnique({ where: { id } });
-  if (!existing) {
-    throw new ResourceNotFoundException(`Customer with id ${id} not found`);
-  }
+  await findOrThrow(prisma.customer.findUnique({ where: { id } }), 'Customer', id);
 
   await prisma.customer.delete({ where: { id } });
 
