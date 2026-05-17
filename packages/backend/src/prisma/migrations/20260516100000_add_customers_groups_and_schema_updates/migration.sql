@@ -55,7 +55,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- AlterTable: products — add cost_price and min_margin_percent (idempotent)
+-- AlterTable: products -add cost_price and min_margin_percent (idempotent)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'products' AND column_name = 'cost_price') THEN
     ALTER TABLE "products" ADD COLUMN "cost_price" DOUBLE PRECISION;
@@ -68,7 +68,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- AlterTable: pricing_profiles — drop customer_name if exists, add customer_id and customer_group_id
+-- AlterTable: pricing_profiles -drop customer_name if exists, add customer_id and customer_group_id
 DO $$ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'pricing_profiles' AND column_name = 'customer_name') THEN
     ALTER TABLE "pricing_profiles" DROP COLUMN "customer_name";
@@ -104,7 +104,7 @@ DO $$ BEGIN
   END IF;
 END $$;
 
--- AlterTable: profile_products — add custom_price (idempotent)
+-- AlterTable: profile_products -add custom_price (idempotent)
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profile_products' AND column_name = 'custom_price') THEN
     ALTER TABLE "profile_products" ADD COLUMN "custom_price" DOUBLE PRECISION;

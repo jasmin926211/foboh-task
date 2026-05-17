@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import computePrice from '../computePrice';
 
 describe('computePrice', () => {
-  // --- Fixed adjustments ---
-
   it('fixed increase: adds value to base price', () => {
     expect(computePrice(100, { adjustmentType: 'fixed', adjustmentDirection: 'increase', adjustmentValue: 15 }))
       .toBe(115);
@@ -13,8 +11,6 @@ describe('computePrice', () => {
     expect(computePrice(409.32, { adjustmentType: 'fixed', adjustmentDirection: 'decrease', adjustmentValue: 15 }))
       .toBe(394.32);
   });
-
-  // --- Dynamic (percentage) adjustments ---
 
   it('dynamic increase: adds percentage to base price', () => {
     expect(computePrice(200, { adjustmentType: 'dynamic', adjustmentDirection: 'increase', adjustmentValue: 10 }))
@@ -26,14 +22,10 @@ describe('computePrice', () => {
       .toBe(251.15); // 279.06 - 27.906 = 251.154 → rounded to 251.15
   });
 
-  // --- Custom type ---
-
   it('custom type: returns base price unchanged', () => {
     expect(computePrice(95, { adjustmentType: 'custom' }))
       .toBe(95);
   });
-
-  // --- Rounding to 2 decimal places ---
 
   it('rounds result to 2 decimal places', () => {
     // 100 + (100 * 33.33 / 100) = 100 + 33.33 = 133.33
@@ -47,14 +39,10 @@ describe('computePrice', () => {
       .toBe(10.04);
   });
 
-  // --- Negative results are allowed (validation is done at service layer) ---
-
   it('allows negative results from large fixed decrease', () => {
     expect(computePrice(10, { adjustmentType: 'fixed', adjustmentDirection: 'decrease', adjustmentValue: 25 }))
       .toBe(-15);
   });
-
-  // --- Error cases ---
 
   it('throws when non-custom adjustment is missing direction', () => {
     expect(() =>

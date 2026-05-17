@@ -17,7 +17,6 @@ export function SetupPage() {
   const navigate = useNavigate();
   const isEditMode = !!id;
 
-  // Form state
   const [profileName, setProfileName] = useState('');
   const [targetType, setTargetType] = useState<TargetType>('all');
   const [customerId, setCustomerId] = useState<string | undefined>();
@@ -29,13 +28,11 @@ export function SetupPage() {
   const [scope, setScope] = useState<'all' | 'selected'>('selected');
   const [customPrices, setCustomPrices] = useState<Record<string, number>>({});
 
-  // Load existing profile for edit mode
   const { data: existingProfile, isLoading: isLoadingProfile } = useProfile(id);
 
   useEffect(() => {
     if (existingProfile) {
       setProfileName(existingProfile.name);
-      // Determine target type from profile data
       if (existingProfile.customerId) {
         setTargetType('customer');
         setCustomerId(existingProfile.customerId);
@@ -68,7 +65,6 @@ export function SetupPage() {
     }
   }, [existingProfile]);
 
-  // Mutations
   const createMutation = useCreateProfile();
   const updateMutation = useUpdateProfile();
   const isSaving = createMutation.isPending || updateMutation.isPending;
@@ -76,7 +72,6 @@ export function SetupPage() {
   const handleSave = useCallback(async (status: 'draft' | 'published') => {
     const isCustom = adjustmentType === 'custom';
 
-    // Validation
     if (!profileName.trim()) {
       toast.error('Please enter a profile name');
       return;
@@ -179,7 +174,7 @@ export function SetupPage() {
 
   return (
     <div className="rounded-card bg-surface-panel p-8">
-      {/* Header row */}
+
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm">
@@ -207,7 +202,7 @@ export function SetupPage() {
         </div>
       </div>
 
-      {/* Section cards */}
+
       <div className="mt-6 flex flex-col gap-4">
         <BasicPricingSummary
           name={profileName}
@@ -240,7 +235,7 @@ export function SetupPage() {
         />
       </div>
 
-      {/* Page footer */}
+
       <div className="mt-8 flex items-center justify-between">
         <p className="text-xs text-ink-400">Your entries are saved automatically</p>
         <div className="flex items-center gap-6">

@@ -9,7 +9,6 @@ interface PriceAdjustment {
 
 const computePrice = (basePrice: number, adjustment: PriceAdjustment): number => {
   if (adjustment.adjustmentType === 'custom') {
-    // Custom prices are stored per-product on the junction row, not computed here.
     return basePrice;
   }
 

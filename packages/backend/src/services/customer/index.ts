@@ -10,7 +10,7 @@ export const createCustomer = async (body: CreateCustomerBody) => {
   logger.info('Entry: createCustomer service');
 
   const existing = await prisma.customer.findFirst({
-    where: { name: { equals: body.name, mode: 'insensitive' } },
+    where: { name: { equals: body.name, mode: 'insensitive' } }
   });
   if (existing) {
     throw new ConflictException(`A customer named "${body.name}" already exists`);
@@ -18,10 +18,10 @@ export const createCustomer = async (body: CreateCustomerBody) => {
 
   const customer = await prisma.customer.create({
     data: { name: body.name, email: body.email },
-    include: includeWithGroups,
+    include: includeWithGroups
   });
 
-  logger.info('Exit: createCustomer service — success');
+  logger.info('Exit: createCustomer service -success');
   return customer;
 };
 
@@ -32,17 +32,17 @@ export const listCustomers = async (search?: string) => {
   if (search) {
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
-      { email: { contains: search, mode: 'insensitive' } },
+      { email: { contains: search, mode: 'insensitive' } }
     ];
   }
 
   const customers = await prisma.customer.findMany({
     where,
     include: includeWithGroups,
-    orderBy: { name: 'asc' },
+    orderBy: { name: 'asc' }
   });
 
-  logger.info(`Exit: listCustomers service — found ${customers.length} customers`);
+  logger.info(`Exit: listCustomers service -found ${customers.length} customers`);
   return customers;
 };
 
@@ -52,10 +52,10 @@ export const getCustomer = async (id: string) => {
   const customer = await findOrThrow(
     prisma.customer.findUnique({ where: { id }, include: includeWithGroups }),
     'Customer',
-    id,
+    id
   );
 
-  logger.info('Exit: getCustomer service — success');
+  logger.info('Exit: getCustomer service -success');
   return customer;
 };
 
@@ -66,7 +66,7 @@ export const updateCustomer = async (id: string, body: UpdateCustomerBody) => {
 
   if (body.name) {
     const duplicate = await prisma.customer.findFirst({
-      where: { name: { equals: body.name, mode: 'insensitive' }, id: { not: id } },
+      where: { name: { equals: body.name, mode: 'insensitive' }, id: { not: id } }
     });
     if (duplicate) {
       throw new ConflictException(`A customer named "${body.name}" already exists`);
@@ -76,10 +76,10 @@ export const updateCustomer = async (id: string, body: UpdateCustomerBody) => {
   const customer = await prisma.customer.update({
     where: { id },
     data: body,
-    include: includeWithGroups,
+    include: includeWithGroups
   });
 
-  logger.info('Exit: updateCustomer service — success');
+  logger.info('Exit: updateCustomer service -success');
   return customer;
 };
 
@@ -90,6 +90,6 @@ export const deleteCustomer = async (id: string) => {
 
   await prisma.customer.delete({ where: { id } });
 
-  logger.info('Exit: deleteCustomer service — success');
+  logger.info('Exit: deleteCustomer service -success');
   return { message: 'Customer deleted successfully' };
 };

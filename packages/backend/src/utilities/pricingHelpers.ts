@@ -12,7 +12,6 @@ export function computeTier(profile: {
   if (profile.customerGroupId) {
     return profile.scope === PROFILE_SCOPE.SELECTED ? 3 : 4;
   }
-  // All customers
   return profile.scope === PROFILE_SCOPE.SELECTED ? 5 : 6;
 }
 

@@ -9,10 +9,10 @@ const wrapController = (name: string, handler: ControllerHandler) => {
     logger.info(`Entry: ${name}`);
     try {
       const { status = 200, data } = await handler(req);
-      logger.info(`Exit: ${name} — success`);
+      logger.info(`Exit: ${name} - success`);
       res.status(status).json(data);
     } catch (error) {
-      logger.error(`Exit: ${name} — error: ${error}`);
+      logger.error(`Exit: ${name} - error: ${error}`);
       next(error);
     }
   };

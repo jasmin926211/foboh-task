@@ -1,14 +1,32 @@
 import prisma from '../../prisma/client';
 import logger from '../../utilities/logger';
-import { ResourceNotFoundException, NegativePriceException, ConflictException } from '../../utilities/exceptions';
+import {
+  ResourceNotFoundException,
+  NegativePriceException,
+  ConflictException
+} from '../../utilities/exceptions';
 import computePrice from '../../utilities/computePrice';
 import findOrThrow from '../../utilities/findOrThrow';
 import { roundToTwo } from '../../utilities/roundTo';
-import { computeTier, computeFloorPrice, calculateMarginInsight } from '../../utilities/pricingHelpers';
-import { CreateProfileBody, UpdateProfileBody, PreviewPricesBody } from '../../policies/pricingProfile';
-import { PROFILE_SCOPE, PROFILE_STATUS, ADJUSTMENT_TYPE, PAGINATION, PERCENTAGE_DIVISOR, TIER_LABELS, EMPTY_MARGIN_INSIGHT } from '../../constants';
-
-// --- Helper: validate that no computed prices are negative ---
+import {
+  computeTier,
+  computeFloorPrice,
+  calculateMarginInsight
+} from '../../utilities/pricingHelpers';
+import {
+  CreateProfileBody,
+  UpdateProfileBody,
+  PreviewPricesBody
+} from '../../policies/pricingProfile';
+import {
+  PROFILE_SCOPE,
+  PROFILE_STATUS,
+  ADJUSTMENT_TYPE,
+  PAGINATION,
+  PERCENTAGE_DIVISOR,
+  TIER_LABELS,
+  EMPTY_MARGIN_INSIGHT
+} from '../../constants';
 
 async function validateNoPricesNegative(params: {
   scope: 'all' | 'selected';
@@ -20,9 +38,14 @@ async function validateNoPricesNegative(params: {
 }) {
   if (params.adjustmentType === 'custom') {
     if (!params.customPrices) return;
-    const negatives: { productId: string; productTitle: string; basePrice: number; computedPrice: number }[] = [];
+    const negatives: {
+      productId: string;
+      productTitle: string;
+      basePrice: number;
+      computedPrice: number;
+    }[] = [];
     const products = await prisma.product.findMany({
-      where: { id: { in: Object.keys(params.customPrices) }, deletedAt: null },
+      where: { id: { in: Object.keys(params.customPrices) }, deletedAt: null }
     });
     for (const product of products) {
       const customPrice = params.customPrices[product.id];
@@ -31,7 +54,7 @@ async function validateNoPricesNegative(params: {
           productId: product.id,
           productTitle: product.title,
           basePrice: product.basePrice,
-          computedPrice: customPrice,
+          computedPrice: customPrice
         });
       }
     }
@@ -42,22 +65,29 @@ async function validateNoPricesNegative(params: {
   const products =
     params.scope === 'all'
       ? await prisma.product.findMany({ where: { deletedAt: null } })
-      : await prisma.product.findMany({ where: { id: { in: params.productIds ?? [] }, deletedAt: null } });
+      : await prisma.product.findMany({
+          where: { id: { in: params.productIds ?? [] }, deletedAt: null }
+        });
 
-  const negatives: { productId: string; productTitle: string; basePrice: number; computedPrice: number }[] = [];
+  const negatives: {
+    productId: string;
+    productTitle: string;
+    basePrice: number;
+    computedPrice: number;
+  }[] = [];
 
   for (const product of products) {
     const computed = computePrice(product.basePrice, {
       adjustmentType: params.adjustmentType,
       adjustmentDirection: params.adjustmentDirection,
-      adjustmentValue: params.adjustmentValue,
+      adjustmentValue: params.adjustmentValue
     });
     if (computed < 0) {
       negatives.push({
         productId: product.id,
         productTitle: product.title,
         basePrice: product.basePrice,
-        computedPrice: computed,
+        computedPrice: computed
       });
     }
   }
@@ -67,16 +97,15 @@ async function validateNoPricesNegative(params: {
   }
 }
 
-// --- Check Name ---
-
-export const checkProfileNameExists = async (name: string, excludeId?: string): Promise<boolean> => {
+export const checkProfileNameExists = async (
+  name: string,
+  excludeId?: string
+): Promise<boolean> => {
   const where: any = { name: { equals: name, mode: 'insensitive' } };
   if (excludeId) where.id = { not: excludeId };
   const count = await prisma.pricingProfile.count({ where });
   return count > 0;
 };
-
-// --- Create ---
 
 export const createProfile = async (body: CreateProfileBody) => {
   logger.info('Entry: createProfile service');
@@ -85,9 +114,8 @@ export const createProfile = async (body: CreateProfileBody) => {
   const status = body.status ?? PROFILE_STATUS.DRAFT;
   const isCustom = body.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
 
-  // Check for duplicate profile name
   const existing = await prisma.pricingProfile.findFirst({
-    where: { name: { equals: body.name, mode: 'insensitive' } },
+    where: { name: { equals: body.name, mode: 'insensitive' } }
   });
   if (existing) {
     throw new ConflictException(`A pricing profile named "${body.name}" already exists`);
@@ -99,7 +127,7 @@ export const createProfile = async (body: CreateProfileBody) => {
     adjustmentType: body.adjustmentType,
     adjustmentDirection: body.adjustmentDirection,
     adjustmentValue: body.adjustmentValue,
-    customPrices: body.customPrices,
+    customPrices: body.customPrices
   });
 
   const profile = await prisma.pricingProfile.create({
@@ -112,33 +140,33 @@ export const createProfile = async (body: CreateProfileBody) => {
       adjustmentValue: isCustom ? null : (body.adjustmentValue ?? null),
       status,
       scope,
-      ...(scope === PROFILE_SCOPE.SELECTED && body.productIds && {
-        profileProducts: {
-          create: body.productIds.map((productId) => ({
-            productId,
-            ...(isCustom && body.customPrices && { customPrice: body.customPrices[productId] ?? null }),
-          })),
-        },
-      }),
+      ...(scope === PROFILE_SCOPE.SELECTED &&
+        body.productIds && {
+          profileProducts: {
+            create: body.productIds.map((productId) => ({
+              productId,
+              ...(isCustom &&
+                body.customPrices && { customPrice: body.customPrices[productId] ?? null })
+            }))
+          }
+        })
     },
     include: {
       profileProducts: { include: { product: true } },
       customer: true,
-      customerGroup: true,
-    },
+      customerGroup: true
+    }
   });
 
-  logger.info('Exit: createProfile service — created profile');
+  logger.info('Exit: createProfile service -created profile');
   return profile;
 };
-
-// --- List ---
 
 export const listProfiles = async (
   search?: string,
   status?: 'draft' | 'published',
   page: number = PAGINATION.DEFAULT_PAGE,
-  limit: number = PAGINATION.DEFAULT_LIMIT,
+  limit: number = PAGINATION.DEFAULT_LIMIT
 ) => {
   logger.info('Entry: listProfiles service');
 
@@ -147,7 +175,7 @@ export const listProfiles = async (
     where.OR = [
       { name: { contains: search, mode: 'insensitive' } },
       { customer: { name: { contains: search, mode: 'insensitive' } } },
-      { customerGroup: { name: { contains: search, mode: 'insensitive' } } },
+      { customerGroup: { name: { contains: search, mode: 'insensitive' } } }
     ];
   }
   if (status) where.status = status;
@@ -158,20 +186,18 @@ export const listProfiles = async (
       include: {
         profileProducts: true,
         customer: true,
-        customerGroup: true,
+        customerGroup: true
       },
       orderBy: { updatedAt: 'desc' },
       skip: (page - 1) * limit,
-      take: limit,
+      take: limit
     }),
-    prisma.pricingProfile.count({ where }),
+    prisma.pricingProfile.count({ where })
   ]);
 
-  logger.info(`Exit: listProfiles service — found ${profiles.length} of ${total} profiles`);
+  logger.info(`Exit: listProfiles service -found ${profiles.length} of ${total} profiles`);
   return { data: profiles, total, page, limit, totalPages: Math.ceil(total / limit) };
 };
-
-// --- Get ---
 
 export const getProfile = async (id: string) => {
   logger.info('Entry: getProfile service');
@@ -182,11 +208,11 @@ export const getProfile = async (id: string) => {
       include: {
         profileProducts: { include: { product: true } },
         customer: true,
-        customerGroup: true,
-      },
+        customerGroup: true
+      }
     }),
     'Pricing profile',
-    id,
+    id
   );
 
   const isCustom = profile.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
@@ -219,15 +245,13 @@ export const getProfile = async (id: string) => {
       : computePrice(product.basePrice, {
           adjustmentType: profile.adjustmentType,
           adjustmentDirection: profile.adjustmentDirection,
-          adjustmentValue: profile.adjustmentValue,
-        }),
+          adjustmentValue: profile.adjustmentValue
+        })
   }));
 
-  logger.info('Exit: getProfile service — success');
+  logger.info('Exit: getProfile service -success');
   return { ...profile, computedPrices };
 };
-
-// --- Update ---
 
 export const updateProfile = async (id: string, body: UpdateProfileBody) => {
   logger.info('Entry: updateProfile service');
@@ -235,10 +259,9 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
   const existing = await findOrThrow(
     prisma.pricingProfile.findUnique({ where: { id } }),
     'Pricing profile',
-    id,
+    id
   );
 
-  // Check for duplicate profile name on rename
   if (body.name && body.name.toLowerCase() !== existing.name.toLowerCase()) {
     const nameExists = await checkProfileNameExists(body.name, id);
     if (nameExists) {
@@ -247,11 +270,16 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
   }
 
   const effectiveScope = (body.scope ?? existing.scope) as 'all' | 'selected';
-  const effectiveAdjType = (body.adjustmentType ?? existing.adjustmentType) as 'fixed' | 'dynamic' | 'custom';
+  const effectiveAdjType = (body.adjustmentType ?? existing.adjustmentType) as
+    | 'fixed'
+    | 'dynamic'
+    | 'custom';
   const isCustom = effectiveAdjType === ADJUSTMENT_TYPE.CUSTOM;
 
   if (!isCustom) {
-    const effectiveAdjDir = (body.adjustmentDirection ?? existing.adjustmentDirection) as 'increase' | 'decrease';
+    const effectiveAdjDir = (body.adjustmentDirection ?? existing.adjustmentDirection) as
+      | 'increase'
+      | 'decrease';
     const effectiveAdjVal = (body.adjustmentValue ?? existing.adjustmentValue) as number;
 
     await validateNoPricesNegative({
@@ -259,14 +287,14 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
       productIds: body.productIds,
       adjustmentType: effectiveAdjType,
       adjustmentDirection: effectiveAdjDir,
-      adjustmentValue: effectiveAdjVal,
+      adjustmentValue: effectiveAdjVal
     });
   } else {
     await validateNoPricesNegative({
       scope: effectiveScope,
       productIds: body.productIds,
       adjustmentType: 'custom',
-      customPrices: body.customPrices,
+      customPrices: body.customPrices
     });
   }
 
@@ -285,8 +313,8 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
       deleteMany: {},
       create: productIds.map((productId) => ({
         productId,
-        ...(isCustom && customPrices && { customPrice: customPrices[productId] ?? null }),
-      })),
+        ...(isCustom && customPrices && { customPrice: customPrices[productId] ?? null })
+      }))
     };
   }
 
@@ -294,20 +322,18 @@ export const updateProfile = async (id: string, body: UpdateProfileBody) => {
     where: { id },
     data: {
       ...updateData,
-      ...(profileProductsUpdate && { profileProducts: profileProductsUpdate }),
+      ...(profileProductsUpdate && { profileProducts: profileProductsUpdate })
     },
     include: {
       profileProducts: { include: { product: true } },
       customer: true,
-      customerGroup: true,
-    },
+      customerGroup: true
+    }
   });
 
-  logger.info('Exit: updateProfile service — success');
+  logger.info('Exit: updateProfile service -success');
   return profile;
 };
-
-// --- Delete ---
 
 export const deleteProfile = async (id: string) => {
   logger.info('Entry: deleteProfile service');
@@ -316,11 +342,9 @@ export const deleteProfile = async (id: string) => {
 
   await prisma.pricingProfile.delete({ where: { id } });
 
-  logger.info('Exit: deleteProfile service — success');
+  logger.info('Exit: deleteProfile service -success');
   return { message: 'Profile deleted successfully' };
 };
-
-// --- Resolve Price (single product) with 6-tier specificity + waterfall ---
 
 export const resolvePrice = async (productId: string, customerId: string) => {
   logger.info('Entry: resolvePrice service');
@@ -330,7 +354,6 @@ export const resolvePrice = async (productId: string, customerId: string) => {
     throw new ResourceNotFoundException(`Product with id ${productId} not found`);
   }
 
-  // Floor protection: clamp to costPrice * (1 + minMarginPercent / 100)
   const floorPrice = computeFloorPrice(product.costPrice, product.minMarginPercent);
 
   if (product.deletedAt !== null) {
@@ -348,14 +371,13 @@ export const resolvePrice = async (productId: string, customerId: string) => {
       floorPrice,
       floorApplied: false,
       waterfall: [],
-      marginInsight: { ...EMPTY_MARGIN_INSIGHT },
+      marginInsight: { ...EMPTY_MARGIN_INSIGHT }
     };
   }
 
-  // Look up the customer and their group memberships
   const customer = await prisma.customer.findUnique({
     where: { id: customerId },
-    include: { memberships: true },
+    include: { memberships: true }
   });
   if (!customer) {
     throw new ResourceNotFoundException(`Customer with id ${customerId} not found`);
@@ -366,21 +388,20 @@ export const resolvePrice = async (productId: string, customerId: string) => {
   const customerOrGroupFilter = [
     { customerId },
     ...(groupIds.length > 0 ? [{ customerGroupId: { in: groupIds } }] : []),
-    { customerId: null, customerGroupId: null },
+    { customerId: null, customerGroupId: null }
   ];
 
-  // Find all profiles (published + draft) that could apply
   const [publishedProfiles, draftProfiles] = await Promise.all([
     prisma.pricingProfile.findMany({
       where: {
         status: PROFILE_STATUS.PUBLISHED,
-        OR: customerOrGroupFilter,
+        OR: customerOrGroupFilter
       },
       include: {
         profileProducts: { where: { productId } },
         customer: true,
-        customerGroup: true,
-      },
+        customerGroup: true
+      }
     }),
     prisma.pricingProfile.findMany({
       where: {
@@ -388,29 +409,24 @@ export const resolvePrice = async (productId: string, customerId: string) => {
         AND: [
           { OR: customerOrGroupFilter },
           {
-            OR: [
-              { scope: PROFILE_SCOPE.ALL },
-              { profileProducts: { some: { productId } } },
-            ],
-          },
-        ],
+            OR: [{ scope: PROFILE_SCOPE.ALL }, { profileProducts: { some: { productId } } }]
+          }
+        ]
       },
       include: {
         profileProducts: { where: { productId } },
         customer: true,
-        customerGroup: true,
-      },
-    }),
+        customerGroup: true
+      }
+    })
   ]);
 
-  // Filter published profiles to those that cover this product
   const matchingProfiles = publishedProfiles.filter((p) => {
     if (p.scope === PROFILE_SCOPE.ALL) return true;
     return p.profileProducts.length > 0;
   });
 
-  // Helper to build a waterfall entry from a profile
-  function buildEntry(p: typeof publishedProfiles[number]) {
+  function buildEntry(p: (typeof publishedProfiles)[number]) {
     const isCustom = p.adjustmentType === ADJUSTMENT_TYPE.CUSTOM;
     const junctionRow = p.profileProducts[0];
     const computedPrice = isCustom
@@ -418,13 +434,13 @@ export const resolvePrice = async (productId: string, customerId: string) => {
       : computePrice(product!.basePrice, {
           adjustmentType: p.adjustmentType,
           adjustmentDirection: p.adjustmentDirection,
-          adjustmentValue: p.adjustmentValue,
+          adjustmentValue: p.adjustmentValue
         });
 
     const tier = computeTier({
       customerId: p.customerId,
       customerGroupId: p.customerGroupId,
-      scope: p.scope,
+      scope: p.scope
     });
 
     return {
@@ -437,14 +453,13 @@ export const resolvePrice = async (productId: string, customerId: string) => {
       adjustment: {
         type: p.adjustmentType,
         direction: p.adjustmentDirection,
-        value: p.adjustmentValue,
+        value: p.adjustmentValue
       },
-      computedPrice,
+      computedPrice
     };
   }
 
   if (matchingProfiles.length === 0) {
-    // Build waterfall from draft profiles only (all rejected)
     const waterfall = draftProfiles.map((p, idx) => {
       const entry = buildEntry(p);
       return {
@@ -452,7 +467,7 @@ export const resolvePrice = async (productId: string, customerId: string) => {
         ...entry,
         priceAfterFloor: null as number | null,
         verdict: 'rejected' as const,
-        reason: 'Profile is in draft status',
+        reason: 'Profile is in draft status'
       };
     });
 
@@ -470,11 +485,10 @@ export const resolvePrice = async (productId: string, customerId: string) => {
       floorPrice,
       floorApplied: false,
       waterfall,
-      marginInsight: { ...EMPTY_MARGIN_INSIGHT },
+      marginInsight: { ...EMPTY_MARGIN_INSIGHT }
     };
   }
 
-  // Build published entries, sort by tier ASC then price ASC
   const publishedEntries = matchingProfiles.map((p) => buildEntry(p));
   publishedEntries.sort((a, b) => {
     if (a.tier !== b.tier) return a.tier - b.tier;
@@ -483,11 +497,9 @@ export const resolvePrice = async (productId: string, customerId: string) => {
 
   const winner = publishedEntries[0];
 
-  // Apply floor to winner
   const floorApplied = floorPrice != null && winner.computedPrice < floorPrice;
   const finalPrice = floorApplied ? floorPrice : winner.computedPrice;
 
-  // Build waterfall: published entries first, then draft (rejected) entries
   const waterfall: {
     position: number;
     profileId: string;
@@ -534,12 +546,11 @@ export const resolvePrice = async (productId: string, customerId: string) => {
       computedPrice: entry.computedPrice,
       priceAfterFloor: isWinner && floorApplied ? finalPrice : null,
       verdict,
-      reason,
+      reason
     });
     position++;
   }
 
-  // Add draft profiles as rejected entries
   for (const p of draftProfiles) {
     const entry = buildEntry(p);
     waterfall.push({
@@ -554,19 +565,20 @@ export const resolvePrice = async (productId: string, customerId: string) => {
       computedPrice: entry.computedPrice,
       priceAfterFloor: null,
       verdict: 'rejected',
-      reason: 'Profile is in draft status',
+      reason: 'Profile is in draft status'
     });
     position++;
   }
 
-  // Compute margin insight
   const sameTierEntries = publishedEntries.filter((e) => e.tier === winner.tier);
   const marginInsight = calculateMarginInsight(sameTierEntries, finalPrice);
 
-  const floorNote = floorApplied ? ` Floor applied: price raised from $${winner.computedPrice.toFixed(2)} to $${finalPrice.toFixed(2)}.` : '';
-  const reason = `Applied profile '${winner.profileName}' (Tier ${winner.tier} — ${winner.tierLabel}). ${matchingProfiles.length} profile${matchingProfiles.length > 1 ? 's' : ''} matched.${floorNote}`;
+  const floorNote = floorApplied
+    ? ` Floor applied: price raised from $${winner.computedPrice.toFixed(2)} to $${finalPrice.toFixed(2)}.`
+    : '';
+  const reason = `Applied profile '${winner.profileName}' (Tier ${winner.tier} -${winner.tierLabel}). ${matchingProfiles.length} profile${matchingProfiles.length > 1 ? 's' : ''} matched.${floorNote}`;
 
-  logger.info('Exit: resolvePrice service — success');
+  logger.info('Exit: resolvePrice service -success');
   return {
     productId: product.id,
     productTitle: product.title,
@@ -581,29 +593,25 @@ export const resolvePrice = async (productId: string, customerId: string) => {
     floorPrice,
     floorApplied,
     waterfall,
-    marginInsight,
+    marginInsight
   };
 };
-
-// --- Resolve All Prices ---
 
 export const resolveAllPrices = async (customerId: string) => {
   logger.info('Entry: resolveAllPrices service');
 
   const products = await prisma.product.findMany({
     where: { deletedAt: null },
-    orderBy: { title: 'asc' },
+    orderBy: { title: 'asc' }
   });
 
   const results = await Promise.all(
     products.map((product) => resolvePrice(product.id, customerId))
   );
 
-  logger.info('Exit: resolveAllPrices service — success');
+  logger.info('Exit: resolveAllPrices service -success');
   return results;
 };
-
-// --- Preview Prices ---
 
 export const previewPrices = async (body: PreviewPricesBody) => {
   logger.info('Entry: previewPrices service');
@@ -616,7 +624,7 @@ export const previewPrices = async (body: PreviewPricesBody) => {
       ? await prisma.product.findMany({ where: { deletedAt: null }, orderBy: { title: 'asc' } })
       : await prisma.product.findMany({
           where: { id: { in: body.productIds ?? [] }, deletedAt: null },
-          orderBy: { title: 'asc' },
+          orderBy: { title: 'asc' }
         });
 
   const warnings: string[] = [];
@@ -632,7 +640,7 @@ export const previewPrices = async (body: PreviewPricesBody) => {
       newPrice = computePrice(product.basePrice, {
         adjustmentType: body.adjustmentType,
         adjustmentDirection: body.adjustmentDirection,
-        adjustmentValue: body.adjustmentValue,
+        adjustmentValue: body.adjustmentValue
       });
       adjustmentAmount =
         body.adjustmentType === ADJUSTMENT_TYPE.FIXED
@@ -651,10 +659,10 @@ export const previewPrices = async (body: PreviewPricesBody) => {
       category: product.subCategory,
       basePrice: product.basePrice,
       adjustment: roundToTwo(adjustmentAmount),
-      newPrice,
+      newPrice
     };
   });
 
-  logger.info(`Exit: previewPrices service — computed ${results.length} prices`);
+  logger.info(`Exit: previewPrices service -computed ${results.length} prices`);
   return { results, warnings };
 };

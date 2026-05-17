@@ -78,8 +78,18 @@ const swaggerConfig = {
               schema: {
                 type: 'object',
                 properties: {
-                  costPrice: { type: 'number', nullable: true, description: 'Cost price for floor calculation' },
-                  minMarginPercent: { type: 'number', nullable: true, minimum: 0, maximum: 100, description: 'Minimum margin percentage (0-100)' }
+                  costPrice: {
+                    type: 'number',
+                    nullable: true,
+                    description: 'Cost price for floor calculation'
+                  },
+                  minMarginPercent: {
+                    type: 'number',
+                    nullable: true,
+                    minimum: 0,
+                    maximum: 100,
+                    description: 'Minimum margin percentage (0-100)'
+                  }
                 }
               }
             }
@@ -611,7 +621,7 @@ const swaggerConfig = {
             }
           },
           404: { description: 'Profile not found' },
-          422: { description: 'Cannot publish — negative prices detected' }
+          422: { description: 'Cannot publish -negative prices detected' }
         }
       },
       delete: {
@@ -662,8 +672,7 @@ const swaggerConfig = {
       get: {
         tags: ['Price Resolution'],
         summary: 'Resolve price for a single product + customer',
-        description:
-          'Returns the winning price with full tier reasoning and price waterfall.',
+        description: 'Returns the winning price with full tier reasoning and price waterfall.',
         parameters: [
           {
             name: 'customerId',
@@ -760,8 +769,16 @@ const swaggerConfig = {
           title: { type: 'string' },
           sku: { type: 'string' },
           basePrice: { type: 'number' },
-          costPrice: { type: 'number', nullable: true, description: 'Cost price for floor calculation' },
-          minMarginPercent: { type: 'number', nullable: true, description: 'Minimum margin percentage (0-100)' },
+          costPrice: {
+            type: 'number',
+            nullable: true,
+            description: 'Cost price for floor calculation'
+          },
+          minMarginPercent: {
+            type: 'number',
+            nullable: true,
+            description: 'Minimum margin percentage (0-100)'
+          },
           category: { type: 'string' },
           imageUrl: { type: 'string', nullable: true },
           createdAt: { type: 'string', format: 'date-time' },
@@ -902,7 +919,10 @@ const swaggerConfig = {
           productId: { type: 'string', format: 'uuid' },
           productTitle: { type: 'string' },
           basePrice: { type: 'number' },
-          finalPrice: { type: 'number', description: 'Effective price after tier resolution and floor protection' },
+          finalPrice: {
+            type: 'number',
+            description: 'Effective price after tier resolution and floor protection'
+          },
           appliedProfile: {
             type: 'object',
             nullable: true,
@@ -925,7 +945,11 @@ const swaggerConfig = {
           reason: { type: 'string' },
           costPrice: { type: 'number', nullable: true, description: 'Product cost price' },
           minMarginPercent: { type: 'number', nullable: true, description: 'Product min margin %' },
-          floorPrice: { type: 'number', nullable: true, description: 'Calculated floor price (costPrice * (1 + minMarginPercent/100))' },
+          floorPrice: {
+            type: 'number',
+            nullable: true,
+            description: 'Calculated floor price (costPrice * (1 + minMarginPercent/100))'
+          },
           floorApplied: { type: 'boolean', description: 'Whether the floor was triggered' },
           waterfall: {
             type: 'array',
@@ -949,7 +973,11 @@ const swaggerConfig = {
                   }
                 },
                 computedPrice: { type: 'number' },
-                priceAfterFloor: { type: 'number', nullable: true, description: 'Set only on winning entry when floor was applied' },
+                priceAfterFloor: {
+                  type: 'number',
+                  nullable: true,
+                  description: 'Set only on winning entry when floor was applied'
+                },
                 verdict: { type: 'string', enum: ['won', 'lost', 'rejected'] },
                 reason: { type: 'string', description: 'Human-readable explanation of verdict' }
               }

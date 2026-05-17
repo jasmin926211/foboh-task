@@ -16,7 +16,7 @@ const validateRequest = (schemas: ValidationSchemas) => {
       }
       if (schemas.query) {
         const parsed = schemas.query.parse({ ...req.query });
-        // req.query is read-only in Express 5 / newer router — mutate in place
+        // req.query is read-only in Express 5 / newer router -mutate in place
         const query = req.query;
         for (const key of Object.keys(query)) {
           delete query[key];
@@ -34,9 +34,7 @@ const validateRequest = (schemas: ValidationSchemas) => {
       next();
     } catch (error: any) {
       if (error instanceof ZodError) {
-        const message = error.issues
-          .map((e) => `${e.path.join('.')}: ${e.message}`)
-          .join(', ');
+        const message = error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join(', ');
         next(new BadRequestException(message));
       } else {
         next(new BadRequestException('Validation failed'));

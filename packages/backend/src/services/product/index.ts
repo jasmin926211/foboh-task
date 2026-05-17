@@ -15,7 +15,7 @@ export const listProducts = async (filters: {
   if (filters.search) {
     where.OR = [
       { title: { contains: filters.search, mode: 'insensitive' } },
-      { sku: { contains: filters.search, mode: 'insensitive' } },
+      { sku: { contains: filters.search, mode: 'insensitive' } }
     ];
   }
   if (filters.subCategory) where.subCategory = filters.subCategory;
@@ -24,7 +24,7 @@ export const listProducts = async (filters: {
 
   const products = await prisma.product.findMany({ where, orderBy: { title: 'asc' } });
 
-  logger.info(`Exit: listProducts service — found ${products.length} products`);
+  logger.info(`Exit: listProducts service -found ${products.length} products`);
   return products;
 };
 
@@ -33,11 +33,14 @@ export const getProduct = async (id: string) => {
 
   const product = await findOrThrow(prisma.product.findUnique({ where: { id } }), 'Product', id);
 
-  logger.info('Exit: getProduct service — success');
+  logger.info('Exit: getProduct service -success');
   return product;
 };
 
-export const updateProduct = async (id: string, body: { costPrice?: number | null; minMarginPercent?: number | null }) => {
+export const updateProduct = async (
+  id: string,
+  body: { costPrice?: number | null; minMarginPercent?: number | null }
+) => {
   logger.info('Entry: updateProduct service');
 
   await findOrThrow(prisma.product.findUnique({ where: { id } }), 'Product', id);
@@ -46,11 +49,11 @@ export const updateProduct = async (id: string, body: { costPrice?: number | nul
     where: { id },
     data: {
       ...(body.costPrice !== undefined && { costPrice: body.costPrice }),
-      ...(body.minMarginPercent !== undefined && { minMarginPercent: body.minMarginPercent }),
-    },
+      ...(body.minMarginPercent !== undefined && { minMarginPercent: body.minMarginPercent })
+    }
   });
 
-  logger.info('Exit: updateProduct service — success');
+  logger.info('Exit: updateProduct service -success');
   return updated;
 };
 
@@ -61,9 +64,9 @@ export const softDeleteProduct = async (id: string) => {
 
   const updated = await prisma.product.update({
     where: { id },
-    data: { deletedAt: new Date() },
+    data: { deletedAt: new Date() }
   });
 
-  logger.info('Exit: softDeleteProduct service — success');
+  logger.info('Exit: softDeleteProduct service -success');
   return updated;
 };

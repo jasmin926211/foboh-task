@@ -107,7 +107,6 @@ export function CustomerGroupsPage() {
     }
   };
 
-  // Customers not yet in the managed group
   const availableCustomers = managingGroup
     ? allCustomers.filter(
         (c) => !managingGroup.memberships?.some((m) => m.customerId === c.id)
