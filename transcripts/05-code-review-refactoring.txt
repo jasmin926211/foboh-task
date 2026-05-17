@@ -1,0 +1,280 @@
+=== USER ===
+Firstly review my whole code frontend and backend and I review it properly as coding structures, any issues in coding or unhadnle error. or need any improvement, repeative coding like this please check using opus 4.6 model review it and becaue my functionality is workign fine so without any changing output just code make more understandle and when you use constant then we can make separate file for those constant so code maintane very good
+
+=== USER ===
+Base directory for this skill: /Users/jasminthummar/.claude/plugins/cache/superpowers-marketplace/superpowers/5.0.6/skills/requesting-code-review
+
+# Requesting Code Review
+
+Dispatch superpowers:code-reviewer subagent to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history. This keeps the reviewer focused on the work product, not your thought process, and preserves your own context for continued work.
+
+**Core principle:** Review early, review often.
+
+## When to Request Review
+
+**Mandatory:**
+- After each task in subagent-driven development
+- After completing major feature
+- Before merge to main
+
+**Optional but valuable:**
+- When stuck (fresh perspective)
+- Before refactoring (baseline check)
+- After fixing complex bug
+
+## How to Request
+
+**1. Get git SHAs:**
+```bash
+BASE_SHA=$(git rev-parse HEAD~1)  # or origin/main
+HEAD_SHA=$(git rev-parse HEAD)
+```
+
+**2. Dispatch code-reviewer subagent:**
+
+Use Task tool with superpowers:code-reviewer type, fill template at `code-reviewer.md`
+
+**Placeholders:**
+- `{WHAT_WAS_IMPLEMENTED}` - What you just built
+- `{PLAN_OR_REQUIREMENTS}` - What it should do
+- `{BASE_SHA}` - Starting commit
+- `{HEAD_SHA}` - Ending commit
+- `{DESCRIPTION}` - Brief summary
+
+**3. Act on feedback:**
+- Fix Critical issues immediately
+- Fix Important issues before proceeding
+- Note Minor issues for later
+- Push back if reviewer is wrong (with reasoning)
+
+## Example
+
+```
+[Just completed Task 2: Add verification function]
+
+You: Let me request code review before proceeding.
+
+BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | awk '{print }')
+HEAD_SHA=$(git rev-parse HEAD)
+
+[Dispatch superpowers:code-reviewer subagent]
+  WHAT_WAS_IMPLEMENTED: Verification and repair functions for conversation index
+  PLAN_OR_REQUIREMENTS: Task 2 from docs/superpowers/plans/deployment-plan.md
+  BASE_SHA: a7981ec
+  HEAD_SHA: 3df7661
+  DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types
+
+[Subagent returns]:
+  Strengths: Clean architecture, real tests
+  Issues:
+    Important: Missing progress indicators
+    Minor: Magic number (100) for reporting interval
+  Assessment: Ready to proceed
+
+You: [Fix progress indicators]
+[Continue to Task 3]
+```
+
+## Integration with Workflows
+
+**Subagent-Driven Development:**
+- Review after EACH task
+- Catch issues before they compound
+- Fix before moving to next task
+
+**Executing Plans:**
+- Review after each batch (3 tasks)
+- Get feedback, apply, continue
+
+**Ad-Hoc Development:**
+- Review before merge
+- Review when stuck
+
+## Red Flags
+
+**Never:**
+- Skip review because "it's simple"
+- Ignore Critical issues
+- Proceed with unfixed Important issues
+- Argue with valid technical feedback
+
+**If reviewer wrong:**
+- Push back with technical reasoning
+- Show code/tests that prove it works
+- Request clarification
+
+See template at: requesting-code-review/code-reviewer.md
+
+=== ASSISTANT ===
+Let me first explore the codebase structure to understand what we're working with.
+
+=== ASSISTANT ===
+Now I have a clear picture of the codebase. Let me dispatch parallel code review agents for the frontend and backend.
+
+=== ASSISTANT ===
+Both reviews are complete. Here's the full code review summary:
+
+---
+
+# FOBOH Full Codebase Review
+
+## Backend Review (31 files)
+
+### Critical Issues (3)
+
+| # | Issue | File |
+|---|-------|------|
+| C1 | **Non-null assertions (`!`) in `computePrice.ts`** — can crash at runtime if DB data has null `adjustmentDirection`/`adjustmentValue` | `utilities/computePrice.ts:13-14` |
+| C2 | **`validateRequest` doesn't assign parsed `query`/`params` back to `req`** — Zod `.default()` values (page/limit) are silently discarded | `middlewares/validateRequest.ts:17-21` |
+| C3 | **N+1 query storm in `resolveAllPrices`** — for 100 products = 300-400 DB queries via `Promise.all` | `services/pricingProfile/index.ts:536-550` |
+
+### Important Issues (9)
+
+| # | Issue | Files |
+|---|-------|-------|
+| I1 | **Controller boilerplate repeated 18 times** — identical try/catch/log pattern across all controllers | All 4 controller files |
+| I2 | **`any` type for Prisma `where` clauses** — defeats TypeScript checking | All 4 service files |
+| I3 | **Magic strings/numbers everywhere** — `'published'`, `'draft'`, `'all'`, `'selected'`, `'custom'`, `'fixed'`, `'dynamic'`, `100`, `1`, `10` | Multiple service/controller files |
+| I4 | **Duplicate "find-or-throw" pattern** — repeated 13 times across services | All 4 service files |
+| I5 | **Duplicate "name uniqueness check" pattern** — same logic in 3 services | customer, customerGroup, pricingProfile |
+| I6 | **Duplicate `profileProducts` update logic** — two identical branches in `updateProfile` | `services/pricingProfile/index.ts:268-286` |
+| I7 | **Error handler uses duck-typing instead of `instanceof`** — `err: any` with property checks | `middlewares/errorHandling.ts` |
+| I8 | **`checkNameController` missing logging + validation** — only controller without entry/exit logging, no Zod policy | `controllers/pricingProfile/index.ts:132` |
+| I9 | **`req.query as any` in product controller** — bypasses type safety | `controllers/product/index.ts:12` |
+
+### Suggestions (10)
+
+- No validation policy on `/check-name` route
+- No graceful shutdown (`SIGTERM`/`SIGINT`) handling
+- Swagger `apis: []` is empty — docs show no endpoints
+- Customer service repeats include pattern 4 times (not extracted like customerGroup)
+- Dead `.filter()` in `resolvePrice` that always returns `true`
+- `previewPrices` adjustment doesn't account for direction in display
+- Config doesn't validate required `DATABASE_URL`
+- No request correlation IDs for logging
+- `generateException` uses `instance: any`
+- Inconsistent controller naming (`customerGroup` uses generic names)
+
+---
+
+## Frontend Review (39 files)
+
+### Critical Issues (3)
+
+| # | Issue | File |
+|---|-------|------|
+| F1 | **Missing `key` on React Fragment in `.map()`** — causes incorrect DOM reconciliation | `pages/resolved-prices/ResolvedPricesPage.tsx:110` |
+| F2 | **`as any` casts bypass type safety** — payload built as `Record<string, unknown>` then cast | `pages/pricing/SetupPage.tsx:133,136` |
+| F3 | **`fetchProfile` has no return type** — propagates `any` through hooks | `api/pricingProfiles.ts:32` |
+
+### Important Issues (10)
+
+| # | Issue | Files |
+|---|-------|-------|
+| F4 | **Duplicated `stringToColor` function** — identical code in 2 files | `ProductRow.tsx`, `SetProductPricing.tsx` |
+| F5 | **Unused imports** — `useState`, `useEffect` imported but never used | `AssignCustomers.tsx:1` |
+| F6 | **Dead `Layout.tsx` component** — never imported anywhere | `components/layout/Layout.tsx` |
+| F7 | **Hardcoded user data** — name "Ekemini", company "Heaps Normal", date "Feb 2024" | `components/layout/TopBar.tsx:8-9` |
+| F8 | **Query key strings scattered as magic strings** — `'profiles'`, `'customers'`, etc. in 10+ files | All hooks + pages |
+| F9 | **`ProfilesPage` bypasses hooks layer** — imports API functions directly, manually invalidates cache | `pages/profiles/ProfilesPage.tsx:6-7` |
+| F10 | **Duplicated modal structure** — same modal wrapper in 2 pages | `CustomersPage.tsx`, `CustomerGroupsPage.tsx` |
+| F11 | **Duplicated loading/error/empty state pattern** — copy-pasted across 5 pages | All list pages |
+| F12 | **Raw `<input>`/`<textarea>` instead of `TextInput` component** | `CustomersPage.tsx`, `CustomerGroupsPage.tsx` |
+| F13 | **Raw `<select>` instead of `SelectInput` component** — in 5+ files | Multiple files |
+
+### Suggestions (12)
+
+- Extract route paths to constants file
+- Extract API endpoint paths to constants file
+- Move `PaginatedProfiles`/`UpdateProfilePayload` types to `types/index.ts`
+- Extract `useProductFilterOptions()` hook to avoid dual `useProducts()` calls
+- Magic number `16` for expiry days in `BasicPricingSummary`
+- Inconsistent import paths (`../types` vs `@/types`)
+- Checkbox missing `role="checkbox"` and `aria-checked`
+- Non-functional checkboxes in `NewPriceTable` (always unchecked, no-op handlers)
+- No `staleTime` on query client
+- Sidebar `isActive` fragile for root paths
+- `SetProductPricing.tsx` is 623 lines — could be split
+- Direct `axios` import in pages bypasses API client layer
+
+---
+
+## Key Constants Files to Create
+
+### Backend: `src/constants/index.ts`
+```typescript
+export const PROFILE_STATUS = { DRAFT: 'draft', PUBLISHED: 'published' } as const;
+export const PROFILE_SCOPE = { ALL: 'all', SELECTED: 'selected' } as const;
+export const ADJUSTMENT_TYPE = { FIXED: 'fixed', DYNAMIC: 'dynamic', CUSTOM: 'custom' } as const;
+export const PAGINATION = { DEFAULT_PAGE: 1, DEFAULT_LIMIT: 10 } as const;
+```
+
+### Frontend: `src/lib/queryKeys.ts`
+```typescript
+export const queryKeys = {
+  profiles: ['profiles'] as const,
+  profile: (id?: string) => ['profile', id] as const,
+  customers: (search?: string) => ['customers', search] as const,
+  // ...
+} as const;
+```
+
+### Frontend: `src/lib/routes.ts`
+```typescript
+export const ROUTES = {
+  PRICING_PROFILES: '/pricing/profiles',
+  PRICING_SETUP: '/pricing/setup',
+  PRICING_SETUP_EDIT: (id: string) => `/pricing/setup/${id}`,
+  // ...
+} as const;
+```
+
+### Frontend: `src/lib/apiEndpoints.ts`
+```typescript
+export const API_ENDPOINTS = {
+  PRICING_PROFILES: '/pricing-profiles',
+  CUSTOMERS: '/customers',
+  CUSTOMER_GROUPS: '/customer-groups',
+  PRODUCTS: '/products',
+} as const;
+```
+
+---
+
+## Recommended Fix Priority
+
+1. **C2** — `validateRequest` not assigning back parsed query/params (silent bug)
+2. **C1** — Non-null assertions in `computePrice` (runtime crash risk)
+3. **F1** — Missing Fragment key (React reconciliation bug)
+4. **I3 + F8** — Extract constants/query keys (quick wins, high impact)
+5. **I1** — Controller wrapper utility (eliminates ~200 lines of boilerplate)
+6. **F4-F6** — Remove dead code and duplicates
+7. **F10-F13** — Extract shared Modal, TableStateWrapper components
+8. **I2 + F2** — Replace `any` types with proper types
+9. **I4 + I5** — Shared `findOrThrow` and name-check utilities
+10. **C3** — `resolveAllPrices` N+1 optimization (track for later)
+
+---
+
+Would you like me to start implementing these fixes? I can tackle them in priority order — starting with the critical bugs and constants extraction, without changing any functionality.
+
+=== USER ===
+yes please do but please make sure that my systm will work fine
+
+=== ASSISTANT ===
+Let me thoroughly read all the critical files to build a precise implementation plan.
+
+=== ASSISTANT ===
+Now let me read the key files that need the most careful changes to get exact line numbers.
+
+=== ASSISTANT ===
+Now let me read the remaining critical frontend files.
+
+=== ASSISTANT ===
+Let me read the remaining key files needed.
+
+=== ASSISTANT ===
+Let me read the remaining exception files and server.ts to complete my understanding.
+
+=== ASSISTANT ===
+I have now read every source file. Let me write the implementation plan.

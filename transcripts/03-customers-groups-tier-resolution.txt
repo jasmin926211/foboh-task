@@ -1,0 +1,858 @@
+=== USER ===
+[Request interrupted by user for tool use]
+
+=== USER ===
+Implement the following plan:
+
+# Customers, Customer Groups & Specificity-Based Price Resolution
+
+## Context
+
+Currently, pricing profiles use a free-text `customerName` string field. The user wants:
+- **Customer** and **CustomerGroup** as first-class DB entities
+- Profiles can target a **specific customer**, a **customer group**, or **all customers**
+- Price resolution uses a **6-tier specificity strategy** ("most specific wins")
+- A new `GET /api/resolve-price?customerId=X&productId=Y` endpoint that returns the winning price with full reasoning
+
+## Specificity Tiers (Most Specific Wins)
+
+| Tier | Target | Scope | Example |
+|------|--------|-------|---------|
+| 1 (highest) | Customer | Selected products | "Bondi Cellars gets $22 on Koyama Brut" |
+| 2 | Customer | All products | "Bondi Cellars gets 10% off everything" |
+| 3 | Group | Selected products | "Premium Buyers get $5 off Koyama Brut" |
+| 4 | Group | All products | "Premium Buyers get 5% off everything" |
+| 5 | All Customers | Selected products | "$2 off Koyama Brut for everyone" |
+| 6 (lowest) | All Customers | All products | "3% off everything for everyone" |
+
+Within the same tier, the **most recently updated** profile wins. If no profiles match, the base price is returned.
+
+---
+
+## Step 1 — Prisma Schema: New Models + Profile Targeting
+
+**File:** `packages/backend/src/prisma/schema.prisma`
+
+Add new models:
+```prisma
+model Customer {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  email     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships     CustomerGroupMembership[]
+  pricingProfiles PricingProfile[]
+
+  @@map("customers")
+}
+
+model CustomerGroup {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  memberships     CustomerGroupMembership[]
+  pricingProfiles PricingProfile[]
+
+  @@map("customer_groups")
+}
+
+model CustomerGroupMembership {
+  id              String @id @default(uuid())
+  customerId      String @map("customer_id")
+  customerGroupId String @map("customer_group_id")
+
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerGroup CustomerGroup @relation(fields: [customerGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, customerGroupId])
+  @@map("customer_group_memberships")
+}
+```
+
+Modify `PricingProfile`:
+- Remove `customerName String @map("customer_name")`
+- Add `customerId String? @map("customer_id")` with relation to Customer
+- Add `customerGroupId String? @map("customer_group_id")` with relation to CustomerGroup
+- When both are null → targets **all customers**
+
+Run: `npx prisma db push`
+
+## Step 2 — Customer CRUD (Backend)
+
+**New files:**
+- `packages/backend/src/policies/customer/index.ts` — Zod schemas for create/update/list
+- `packages/backend/src/services/customer/index.ts` — create, list, get, update, delete
+- `packages/backend/src/controllers/customer/index.ts` — Express router
+
+**Routes:** `POST /customers`, `GET /customers`, `GET /customers/:id`, `PUT /customers/:id`, `DELETE /customers/:id`
+
+Register in `packages/backend/src/controllers/index.ts`
+
+## Step 3 — CustomerGroup CRUD (Backend)
+
+**New files:**
+- `packages/backend/src/policies/customerGroup/index.ts` — Zod schemas
+- `packages/backend/src/services/customerGroup/index.ts` — CRUD + membership management
+- `packages/backend/src/controllers/customerGroup/index.ts` — Express router
+
+**Routes:** `POST /customer-groups`, `GET /customer-groups`, `GET /customer-groups/:id`, `PUT /customer-groups/:id`, `DELETE /customer-groups/:id`
+**Membership:** `POST /customer-groups/:id/members` (add), `DELETE /customer-groups/:id/members/:customerId` (remove)
+
+Register in `packages/backend/src/controllers/index.ts`
+
+## Step 4 — Update PricingProfile Targeting
+
+### 4a — Zod policies (`packages/backend/src/policies/pricingProfile/index.ts`)
+- Create: replace `customerNames` with optional `customerId`/`customerGroupId` (both null = all customers)
+- Update: replace `customerName` with optional `customerId`/`customerGroupId`
+- Resolve endpoints: change `customerName` query param to `customerId: z.string().uuid()`
+- Refinement: at most one of `customerId`/`customerGroupId` can be set
+
+### 4b — Services (`packages/backend/src/services/pricingProfile/index.ts`)
+- **createProfile**: Single profile creation with `customerId`/`customerGroupId` (no more customerNames loop)
+- **listProfiles**: Search by customer/group name via joins
+- **updateProfile**: Handle `customerId`/`customerGroupId`
+- **getProfile**: Include customer/group relation data
+
+### 4c — Controller (`packages/backend/src/controllers/pricingProfile/index.ts`)
+- Update resolve controllers to use `customerId`
+
+## Step 5 — Specificity-Based Price Resolution
+
+**File:** `packages/backend/src/services/pricingProfile/index.ts`
+
+Rewrite `resolvePrice(productId, customerId)`:
+1. Look up customer and their group memberships
+2. Find all published profiles that could apply:
+   - `customerId` matches this customer
+   - `customerGroupId` matches any of the customer's groups
+   - Both null (targets all)
+3. For each profile, check product coverage (scope=all OR product in profileProducts)
+4. Assign tier (1-6) based on target type + scope
+5. Sort by tier ASC, then updatedAt DESC
+6. Winner = first in sorted list
+7. Return: `{ productId, productTitle, basePrice, newPrice, appliedProfile, tier, tierLabel, reason, candidateProfiles, rejectedProfiles }`
+
+New endpoint: `GET /api/resolve-price?customerId=X&productId=Y` in main router
+
+## Step 6 — Frontend Types, API, and Hooks
+
+### 6a — Types (`packages/frontend/src/types/index.ts`)
+- Add `Customer`, `CustomerGroup` interfaces
+- Update `PricingProfile`: add `customer?`, `customerGroup?`, `customerId?`, `customerGroupId?`; remove `customerName`
+- Update `CreateProfilePayload`: replace `customerNames` with `customerId?`/`customerGroupId?`
+- Update `ResolvedPrice`: add `tier`, `tierLabel`
+
+### 6b — New API files
+- `packages/frontend/src/api/customers.ts` — CRUD functions
+- `packages/frontend/src/api/customerGroups.ts` — CRUD + membership functions
+
+### 6c — Update existing API (`packages/frontend/src/api/pricingProfiles.ts`)
+- `fetchResolvedPrices` takes `customerId` instead of `customerName`
+- `UpdateProfilePayload`: `customerId`/`customerGroupId` instead of `customerName`
+
+### 6d — New hooks
+- `packages/frontend/src/hooks/useCustomers.ts`
+- `packages/frontend/src/hooks/useCustomerGroups.ts`
+
+## Step 7 — Frontend: Customer & Group Pages
+
+### 7a — Customers page (`packages/frontend/src/pages/customers/CustomersPage.tsx`)
+- Replace placeholder at `/customers` route
+- Table: name, email, groups, created date
+- Create/edit customer modal
+
+### 7b — Customer Groups page (`packages/frontend/src/pages/customer-groups/CustomerGroupsPage.tsx`)
+- New route `/customer-groups`
+- Table: name, description, member count
+- Manage members (add/remove customers)
+- Add to sidebar nav
+
+### 7c — Routes & Sidebar
+- `packages/frontend/src/App.tsx`: wire up new pages
+- `packages/frontend/src/components/layout/Sidebar.tsx`: add Customer Groups nav item
+
+## Step 8 — Frontend: Update Profile Setup & Resolved Prices
+
+### 8a — SetupPage (`packages/frontend/src/pages/pricing/SetupPage.tsx`)
+- Replace `customerNames` state with `targetType: 'customer' | 'group' | 'all'`
+- Add `customerId`/`customerGroupId` state
+- Build payload accordingly
+
+### 8b — AssignCustomers → ProfileTargetSelector (`packages/frontend/src/components/pricing/AssignCustomers.tsx`)
+- Redesign with three radio options:
+  - **Specific Customer** → dropdown from `/customers` API
+  - **Customer Group** → dropdown from `/customer-groups` API
+  - **All Customers** → no selection needed
+- Emits `{ targetType, customerId?, customerGroupId? }`
+
+### 8c — ProfilesPage (`packages/frontend/src/pages/profiles/ProfilesPage.tsx`)
+- Column: show customer name, group name, or "All Customers" badge
+- Search works via backend joins
+
+### 8d — ResolvedPricesPage (`packages/frontend/src/pages/resolved-prices/ResolvedPricesPage.tsx`)
+- Replace text input with customer dropdown
+- Send `customerId` to resolve endpoint
+- Show tier info in expanded rows (e.g. "Tier 1 — Customer + Selected Products")
+
+---
+
+## Verification
+
+1. **Seed**: Create customers (Bondi Cellars), groups (Premium Buyers), add Bondi to Premium Buyers
+2. **Create profiles**:
+   - "Premium Buyers 5% off" → group=Premium Buyers, dynamic, decrease 5%, scope=all
+   - "Bondi Special" → customer=Bondi Cellars, custom, scope=selected, $22 on Koyama Brut
+3. **Resolve**: `GET /api/resolve-price?customerId=<bondi>&productId=<koyama>` → $22 (Tier 1 wins)
+4. **All prices**: `GET /api/resolved-prices?customerId=<bondi>` → Koyama at $22 (Tier 1), others at 5% off (Tier 4)
+5. **Existing profiles**: Fixed/dynamic/custom still work correctly
+6. **Frontend**: Customer/group CRUD works, profile setup uses dropdowns, resolved prices shows tier info
+
+
+If you need specific details from before exiting plan mode (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/jasminthummar/.claude/projects/-Users-jasminthummar-Desktop-foboh/67e3ded5-4f22-4437-9b0b-6ba123a4bdf9.jsonl
+
+=== ASSISTANT ===
+I'll start by exploring the existing codebase structure to understand the current implementation before making changes.
+
+=== ASSISTANT ===
+Now let me read the key files I'll be modifying to get their exact contents.
+
+=== ASSISTANT ===
+Now let me read the frontend files I'll be modifying.
+
+=== ASSISTANT ===
+Now let me read the remaining frontend pages.
+
+=== ASSISTANT ===
+I have a complete understanding of the codebase. Let me create tasks and start implementing.
+
+=== ASSISTANT ===
+Now let's start implementing. Step 1: Update the Prisma schema.
+
+=== ASSISTANT ===
+Now push the schema to the database.
+
+=== ASSISTANT ===
+Step 2: Customer CRUD backend.
+
+=== ASSISTANT ===
+Step 3: CustomerGroup CRUD backend.
+
+=== ASSISTANT ===
+Step 4: Update PricingProfile targeting.
+
+=== ASSISTANT ===
+Now update the pricing profile service with the new targeting and specificity-based resolution (Steps 4b + 5 combined).
+
+=== ASSISTANT ===
+Now update the pricing profile controller.
+
+=== ASSISTANT ===
+Now update the main router to register new routes.
+
+=== ASSISTANT ===
+Let me verify the backend compiles before moving to frontend.
+
+=== ASSISTANT ===
+Let me fix the TypeScript errors.
+
+=== ASSISTANT ===
+Wait, that's redundant. Let me look at the actual controller more carefully - the issue is `req.params.id` returns `string | string[]`. Let me fix all the controllers properly.
+
+=== ASSISTANT ===
+Now fix the customerGroup controller similarly.
+
+=== ASSISTANT ===
+Now fix the duplicate `OR` key in the pricingProfile service.
+
+=== ASSISTANT ===
+I see the duplicate `OR` key. Let me fix that by using `AND` to combine the conditions.
+
+=== ASSISTANT ===
+Backend compiles cleanly. Now let's move to the frontend. Step 6: Frontend types, API, and hooks.
+
+=== ASSISTANT ===
+Now create the customer and customer group API files and hooks.
+
+=== ASSISTANT ===
+Update the pricingProfiles API.
+
+=== ASSISTANT ===
+Now create the hooks.
+
+=== ASSISTANT ===
+Update the usePricingProfiles hook (the `useProfiles` signature changed from `customerName` to `search`).
+
+=== ASSISTANT ===
+Step 7: Frontend Customer & CustomerGroup pages.
+
+=== ASSISTANT ===
+Now update routes and sidebar.
+
+=== ASSISTANT ===
+Step 8: Update Profile Setup, AssignCustomers, ProfilesPage, ResolvedPricesPage.
+
+=== ASSISTANT ===
+First, redesign AssignCustomers with the three radio options.
+
+=== ASSISTANT ===
+Now update SetupPage.
+
+=== ASSISTANT ===
+Now update ProfilesPage to show customer/group/all info instead of `customerName`.
+
+=== ASSISTANT ===
+Now update ResolvedPricesPage with customer dropdown and tier info.
+
+=== ASSISTANT ===
+I need to fix the ResolvedPricesPage JSX - the nested `<tr>` structure is invalid. Let me fix it.
+
+=== ASSISTANT ===
+Now let me verify the frontend compiles.
+
+=== ASSISTANT ===
+Frontend compiles cleanly. Let me also verify the backend still compiles.
+
+=== ASSISTANT ===
+Both backend and frontend compile without errors.
+
+=== ASSISTANT ===
+All 8 steps are complete. Here's a summary of everything implemented:
+
+## Summary of Changes
+
+### Backend
+
+**Step 1 — Prisma Schema** (`schema.prisma`)
+- Added `Customer`, `CustomerGroup`, `CustomerGroupMembership` models
+- Updated `PricingProfile`: replaced `customerName` with `customerId`/`customerGroupId` (both nullable = all customers)
+- Relations set up with cascading deletes on memberships
+
+**Step 2 — Customer CRUD** (3 new files)
+- `policies/customer/index.ts` — Zod schemas for create/update/list
+- `services/customer/index.ts` — CRUD with duplicate name prevention
+- `controllers/customer/index.ts` — Express routes at `/customers`
+
+**Step 3 — CustomerGroup CRUD** (3 new files)
+- `policies/customerGroup/index.ts` — Zod schemas + membership policies
+- `services/customerGroup/index.ts` — CRUD + `addMember`/`removeMember`
+- `controllers/customerGroup/index.ts` — Routes at `/customer-groups` with `/members` sub-routes
+
+**Step 4 — PricingProfile Targeting**
+- Policies: `customerNames` → `customerId`/`customerGroupId` with mutual exclusion refinement
+- Services: Single profile creation (no more per-customer loop), search via customer/group joins
+- Controller: `customerId` query param instead of `customerName`
+
+**Step 5 — 6-Tier Specificity Resolution**
+- `resolvePrice()` now: looks up customer's groups → finds all matching profiles → assigns tier (1-6) → sorts by tier ASC, updatedAt DESC → returns winner with full tier info
+- New `GET /api/resolve-price?customerId=X&productId=Y` endpoint
+- `controllers/index.ts` registers all new routes
+
+### Frontend
+
+**Step 6 — Types, API, Hooks**
+- Types: Added `Customer`, `CustomerGroup`, `CustomerGroupMembership`; updated `PricingProfile` and `ResolvedPrice` with tier fields
+- New `api/customers.ts` and `api/customerGroups.ts`
+- New `hooks/useCustomers.ts` and `hooks/useCustomerGroups.ts`
+- Updated `api/pricingProfiles.ts`: `fetchResolvedPrices` takes `customerId`
+
+**Step 7 — Customer & Group Pages**
+- `CustomersPage.tsx` — CRUD table with create/edit modal, group badges
+- `CustomerGroupsPage.tsx` — CRUD table + manage members modal
+- `App.tsx` — wired up `/customers` and `/customer-groups` routes
+- `Sidebar.tsx` — added "Customer Groups" nav item with `UsersRound` icon
+
+**Step 8 — Updated Pricing UI**
+- `AssignCustomers.tsx` — redesigned with 3 radio options (Specific Customer, Customer Group, All Customers) with dropdown selectors
+- `SetupPage.tsx` — uses `targetType`/`customerId`/`customerGroupId` state
+- `ProfilesPage.tsx` — "Target" column with color-coded badges (blue=customer, purple=group, gray=all); search filter works via backend joins
+- `ResolvedPricesPage.tsx` — customer dropdown instead of text input, tier badge column, expanded rows show tier info
+
+=== USER ===
+I have testd I found some issues first is when i tried to add customer in group. it is added but not update this section still swhowing No members in this group. but when i refresh then it reflects
+
+=== USER ===
+[Image: source: /Users/jasminthummar/Desktop/Screenshot 2026-05-16 at 3.51.33 PM.png]
+
+=== ASSISTANT ===
+The issue is that `managingGroup` is local state that doesn't update when the React Query cache refreshes. I need to sync it with the latest data from the query.
+
+=== ASSISTANT ===
+The fix: instead of storing the full group object in `managingGroup` (stale snapshot), store only the group ID, then derive the live group from the query data.
+
+=== ASSISTANT ===
+Now add the derived `managingGroup` from live query data, and update all references:
+
+=== ASSISTANT ===
+Now replace all `setManagingGroup(group)` with `setManagingGroupId(group.id)` and `setManagingGroup(null)` with `setManagingGroupId(null)`:
+
+=== ASSISTANT ===
+Let me verify it compiles and the logic is correct:
+
+=== ASSISTANT ===
+Compiles clean. The fix: `managingGroup` was a **stale state snapshot** — when the mutation invalidated the `customer-groups` query and React Query refetched, the `groups` array updated but `managingGroup` (stored via `useState`) still held the old object. 
+
+Now `managingGroupId` stores just the ID, and `managingGroup` is derived from the live `groups` array on every render, so it automatically reflects the fresh data after add/remove member mutations.
+
+=== USER ===
+in frontend i have two file cn.ts and utils.ts which one is useless?
+
+=== ASSISTANT ===
+They're identical. Let me check which one is actually imported:
+
+=== ASSISTANT ===
+**`utils.ts` is the duplicate.** Both files export the exact same `cn` function. The `ui/` components (likely shadcn) import from `@/lib/utils`, while your custom components import from `@/lib/cn`.
+
+The simplest cleanup: **delete `cn.ts`** and update its 8 imports to use `@/lib/utils` instead, since `utils.ts` is the shadcn convention and has more consumers. Or vice versa — your call. Either way one should go.
+
+=== USER ===
+ok change it abd then delete cb.ts
+
+=== ASSISTANT ===
+Need to read those files first.
+
+=== ASSISTANT ===
+Now delete `cn.ts` and verify:
+
+=== ASSISTANT ===
+Done. All 8 imports updated to `@/lib/utils` and `cn.ts` deleted. Compiles cleanly with no errors.
+
+=== USER ===
+can you make packages/frontend/src/api/client.ts this clint into lib because currenlty it is in api folder
+
+=== ASSISTANT ===
+Now delete the old file and verify:
+
+=== ASSISTANT ===
+Done. Moved `api/client.ts` to `lib/client.ts`, updated all 4 imports, and deleted the old file. Compiles cleanly.
+
+=== USER ===
+can you intilaze query client in lib folder and import in App.tsx?
+
+=== ASSISTANT ===
+Done. Created `lib/queryClient.ts`, imported it in `App.tsx`, and removed the inline initialization. Compiles cleanly.
+
+=== USER ===
+refetchOnWindowFocus: false, by default
+
+=== ASSISTANT ===
+Done. All queries now have `refetchOnWindowFocus: false` by default.
+
+=== USER ===
+my swagger api route is blank. I think not load properly. I have already backend endpoints please check and create
+
+=== ASSISTANT ===
+The issue is clear — `apis: []` is empty, so no endpoints are being documented. I'll also need to read the current controllers and constants to build the spec properly.
+
+=== ASSISTANT ===
+Now let me check the policies to get exact field definitions for the spec.
+
+=== USER ===
+This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.
+
+Analysis:
+Let me chronologically analyze the conversation:
+
+1. **Initial Request**: User asked to implement a detailed plan for "Customers, Customer Groups & Specificity-Based Price Resolution" - an 8-step plan covering:
+   - Prisma schema changes (Customer, CustomerGroup, CustomerGroupMembership models)
+   - Customer CRUD backend
+   - CustomerGroup CRUD backend with membership management
+   - Update PricingProfile targeting (customerName → customerId/customerGroupId)
+   - 6-tier specificity-based price resolution
+   - Frontend types, API, hooks
+   - Frontend Customer & Group pages
+   - Frontend profile setup, assign customers, profiles page, resolved prices page updates
+
+2. **Codebase Exploration**: Used an Explore agent to understand the full codebase structure, then read all key files individually.
+
+3. **Implementation**: Created 8 tasks and implemented them sequentially:
+   - Step 1: Updated Prisma schema - added Customer, CustomerGroup, CustomerGroupMembership models, changed PricingProfile from customerName to customerId/customerGroupId. Ran `prisma db push --accept-data-loss` (dropped customerName column).
+   - Step 2: Created Customer CRUD backend (policies, services, controllers)
+   - Step 3: Created CustomerGroup CRUD backend with membership management
+   - Step 4: Updated PricingProfile policies, services, controllers for new targeting
+   - Step 5: Implemented 6-tier specificity-based price resolution
+   - Step 6: Updated frontend types, created new API files and hooks
+   - Step 7: Created CustomersPage and CustomerGroupsPage, updated App.tsx routes and Sidebar
+   - Step 8: Redesigned AssignCustomers component with radio options, updated SetupPage, ProfilesPage, ResolvedPricesPage
+
+4. **TypeScript Errors Fixed**:
+   - `req.params.id` type errors in customer/customerGroup controllers (added `as string` casts)
+   - Duplicate `OR` key in pricingProfile service (wrapped in `AND` array)
+
+5. **Bug Fix - Stale State**: User reported that adding a customer to a group didn't update the members list in the modal until page refresh. Fixed by changing `managingGroup` from a state snapshot (`useState<CustomerGroup | null>`) to deriving it from live query data using `managingGroupId` + `groups.find()`.
+
+6. **Cleanup - cn.ts vs utils.ts**: User asked which was useless. Both were identical `cn()` functions. Updated all 8 imports from `@/lib/cn` to `@/lib/utils`, deleted `cn.ts`.
+
+7. **Move API client**: User asked to move `api/client.ts` to `lib/client.ts`. Updated all 4 API file imports, deleted old file.
+
+8. **Move QueryClient**: User asked to initialize QueryClient in lib folder. Created `lib/queryClient.ts`, imported in App.tsx, removed inline initialization.
+
+9. **refetchOnWindowFocus**: User asked to add `refetchOnWindowFocus: false` as default. Updated `lib/queryClient.ts`.
+
+10. **Linter modifications**: Many files were modified by linter/user between messages. Key changes include:
+    - Introduction of `ROUTES` constants (`@/lib/routes`)
+    - Introduction of `QUERY_KEYS` constants (`@/lib/queryKeys`)
+    - Introduction of `API_ENDPOINTS` constants (`@/lib/apiEndpoints`)
+    - Introduction of `wrapController` utility replacing try/catch patterns
+    - Introduction of `findOrThrow` utility replacing manual not-found checks
+    - Introduction of `PAGINATION`, `PROFILE_SCOPE`, `PROFILE_STATUS`, `ADJUSTMENT_TYPE`, `PERCENTAGE_DIVISOR` constants
+    - `PlaceholderPage` renamed to `UnderDevelopmentPage`
+    - `PaginatedProfiles` and `UpdateProfilePayload` moved to `@/types`
+    - `useDeleteProfile` hook added
+    - ProfilesPage uses `useDeleteProfile` and `useUpdateProfile` hooks instead of direct API calls
+    - `SelectInput` component enhanced with `allowEmpty` prop
+    - `queryClient.ts` enhanced with `refetchOnReconnect: true` and `staleTime: 1000 * 60 * 5`
+
+11. **Current Request**: User says swagger API route is blank/not loading properly. They have backend endpoints and want me to check and create the swagger documentation. Looking at `swagger.ts`, the `apis: []` array is empty - no endpoints are being documented. I read all the policy files and controller files to understand the endpoints.
+
+Summary:
+1. Primary Request and Intent:
+   The user requested implementation of a comprehensive plan for "Customers, Customer Groups & Specificity-Based Price Resolution" across an 8-step process. This involved:
+   - Adding Customer, CustomerGroup, and CustomerGroupMembership as first-class DB entities
+   - Replacing free-text `customerName` on PricingProfile with `customerId`/`customerGroupId` relations
+   - Implementing a 6-tier specificity-based price resolution strategy ("most specific wins")
+   - Creating full CRUD APIs and frontend pages for Customers and Customer Groups
+   - Updating all existing pricing profile UI to use the new targeting system
+   - Various follow-up cleanup tasks (removing duplicate `cn.ts`, moving `api/client.ts` to `lib/`, moving QueryClient to `lib/`, adding `refetchOnWindowFocus: false`)
+   - Most recently: fixing blank Swagger API documentation page
+
+2. Key Technical Concepts:
+   - **Prisma ORM** with PostgreSQL (schema models, relations, `db push`, client generation)
+   - **6-Tier Specificity Strategy**: Tier 1 (Customer+Selected Products) through Tier 6 (All Customers+All Products), sorted by tier ASC then updatedAt DESC
+   - **Express.js** REST API with controller/service/policy pattern
+   - **Zod** validation schemas for request validation
+   - **React Query** (TanStack Query) for data fetching with hooks pattern
+   - **React Router** for frontend routing
+   - **Swagger/OpenAPI 3.0** documentation with `swagger-jsdoc` and `swagger-ui-express`
+   - Stale state bug pattern: storing query data in `useState` vs deriving from live query cache
+   - `wrapController` utility pattern (introduced by linter/user)
+   - `findOrThrow` utility for DRY not-found checks (introduced by linter/user)
+   - Constants files: `ROUTES`, `QUERY_KEYS`, `API_ENDPOINTS`, `PAGINATION`, `PROFILE_SCOPE`, etc.
+
+3. Files and Code Sections:
+
+   - **`packages/backend/src/prisma/schema.prisma`**
+     - Core schema file. Added Customer, CustomerGroup, CustomerGroupMembership models. Changed PricingProfile from `customerName String` to `customerId String?` and `customerGroupId String?` with relations.
+     - Key additions:
+     ```prisma
+     model Customer {
+       id        String   @id @default(uuid())
+       name      String   @unique
+       email     String?
+       createdAt DateTime @default(now()) @map("created_at")
+       updatedAt DateTime @updatedAt @map("updated_at")
+       memberships     CustomerGroupMembership[]
+       pricingProfiles PricingProfile[]
+       @@map("customers")
+     }
+     model CustomerGroup {
+       id          String   @id @default(uuid())
+       name        String   @unique
+       description String?
+       createdAt   DateTime @default(now()) @map("created_at")
+       updatedAt   DateTime @updatedAt @map("updated_at")
+       memberships     CustomerGroupMembership[]
+       pricingProfiles PricingProfile[]
+       @@map("customer_groups")
+     }
+     model CustomerGroupMembership {
+       id              String @id @default(uuid())
+       customerId      String @map("customer_id")
+       customerGroupId String @map("customer_group_id")
+       customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+       customerGroup CustomerGroup @relation(fields: [customerGroupId], references: [id], onDelete: Cascade)
+       @@unique([customerId, customerGroupId])
+       @@map("customer_group_memberships")
+     }
+     ```
+     - PricingProfile now has `customerId`, `customerGroupId`, `customer` relation, `customerGroup` relation instead of `customerName`.
+
+   - **`packages/backend/src/policies/customer/index.ts`** — New file. Zod schemas for customer CRUD (createCustomerPolicy, updateCustomerPolicy, getCustomerPolicy, deleteCustomerPolicy, listCustomersPolicy).
+
+   - **`packages/backend/src/services/customer/index.ts`** — New file. Customer CRUD service. Now uses `findOrThrow` and `includeWithGroups` constant per linter changes.
+
+   - **`packages/backend/src/controllers/customer/index.ts`** — New file. Express router for `/customers`. Now uses `wrapController` pattern per linter changes.
+
+   - **`packages/backend/src/policies/customerGroup/index.ts`** — New file. Zod schemas for customer group CRUD + membership (addMemberPolicy, removeMemberPolicy).
+
+   - **`packages/backend/src/services/customerGroup/index.ts`** — New file. CustomerGroup CRUD + addMember/removeMember. Uses `findOrThrow` per linter changes.
+
+   - **`packages/backend/src/controllers/customerGroup/index.ts`** — New file. Express router for `/customer-groups` with membership sub-routes. Uses `wrapController` per linter changes.
+
+   - **`packages/backend/src/policies/pricingProfile/index.ts`** — Updated. Replaced `customerNames` with `customerId`/`customerGroupId` in create policy. Added mutual exclusion refinement. Changed `customerName` query params to `customerId` UUIDs. Added `resolvePricePolicy` for the new endpoint. `listProfilesPolicy` changed `customerName` to `search`.
+
+   - **`packages/backend/src/services/pricingProfile/index.ts`** — Major rewrite. `createProfile` creates single profile (no more customerNames loop). `listProfiles` searches via customer/group joins. `resolvePrice` implements 6-tier specificity with `computeTier()` helper. Uses `findOrThrow`, `PROFILE_SCOPE`, `PROFILE_STATUS`, `ADJUSTMENT_TYPE`, `PAGINATION`, `PERCENTAGE_DIVISOR` constants per linter changes.
+     - Key tier logic:
+     ```typescript
+     function computeTier(profile) {
+       if (profile.customerId) return profile.scope === 'selected' ? 1 : 2;
+       if (profile.customerGroupId) return profile.scope === 'selected' ? 3 : 4;
+       return profile.scope === 'selected' ? 5 : 6;
+     }
+     ```
+
+   - **`packages/backend/src/controllers/pricingProfile/index.ts`** — Updated. Added `resolveSinglePriceController`. Uses `customerId` instead of `customerName`. Uses `wrapController` and `PAGINATION` constants per linter changes.
+
+   - **`packages/backend/src/controllers/index.ts`** — Updated. Registered `/customers`, `/customer-groups` routers and `GET /resolve-price` endpoint.
+
+   - **`packages/frontend/src/types/index.ts`** — Updated. Added `Customer`, `CustomerGroup`, `CustomerGroupMembership` interfaces. Updated `PricingProfile` with `customerId`/`customerGroupId`/`customer`/`customerGroup`. Updated `ResolvedPrice` with `tier`/`tierLabel` and enhanced `candidateProfiles` with `customerName`/`tier`/`tierLabel`. Updated `CreateProfilePayload` (removed `customerNames`, added `customerId`/`customerGroupId`). Added `PaginatedProfiles` and `UpdateProfilePayload` (moved from API file per linter changes).
+
+   - **`packages/frontend/src/api/customers.ts`** — New file. CRUD API functions using `API_ENDPOINTS.CUSTOMERS` per linter changes.
+
+   - **`packages/frontend/src/api/customerGroups.ts`** — New file. CRUD + membership API functions using `API_ENDPOINTS.CUSTOMER_GROUPS` per linter changes.
+
+   - **`packages/frontend/src/api/pricingProfiles.ts`** — Updated. `fetchProfiles` uses `search` param. `fetchResolvedPrices` takes `customerId`. Uses `API_ENDPOINTS` constants per linter changes. `PaginatedProfiles` and `UpdateProfilePayload` types moved to `@/types`.
+
+   - **`packages/frontend/src/hooks/useCustomers.ts`** — New file. `useCustomers`, `useCreateCustomer`, `useUpdateCustomer`, `useDeleteCustomer`. Uses `QUERY_KEYS` per linter changes.
+
+   - **`packages/frontend/src/hooks/useCustomerGroups.ts`** — New file. `useCustomerGroups`, CRUD mutations, `useAddGroupMember`, `useRemoveGroupMember`. Uses `QUERY_KEYS` per linter changes.
+
+   - **`packages/frontend/src/hooks/usePricingProfiles.ts`** — Updated. `useProfiles` parameter renamed from `customerName` to `search`. Added `useDeleteProfile`. Uses `QUERY_KEYS` per linter changes.
+
+   - **`packages/frontend/src/pages/customers/CustomersPage.tsx`** — New file. Full CRUD table with create/edit modal, group badges, search filter. Shows results count per linter changes.
+
+   - **`packages/frontend/src/pages/customer-groups/CustomerGroupsPage.tsx`** — New file. CRUD table + manage members modal. Uses `managingGroupId` (not full object) to derive live group from query data. Shows results count per linter changes.
+
+   - **`packages/frontend/src/components/pricing/AssignCustomers.tsx`** — Complete redesign. Three radio options (Specific Customer → dropdown, Customer Group → dropdown, All Customers). Exports `TargetType`. Removed unused imports per linter changes.
+
+   - **`packages/frontend/src/pages/pricing/SetupPage.tsx`** — Updated. Uses `targetType`/`customerId`/`customerGroupId` state instead of `customerNames`. Build payload with spread operator per linter changes. Uses `ROUTES` constants.
+
+   - **`packages/frontend/src/pages/profiles/ProfilesPage.tsx`** — Updated. "Target" column with `getTargetLabel`/`getTargetBadgeClass` (blue=customer, purple=group, gray=all). Search filter renamed. Uses `useDeleteProfile`/`useUpdateProfile` hooks, `ROUTES`, `SelectInput` per linter changes.
+
+   - **`packages/frontend/src/pages/resolved-prices/ResolvedPricesPage.tsx`** — Updated. Customer dropdown instead of text input. Tier badge column. Expanded rows show tier info. Uses `Fragment` and `QUERY_KEYS` per linter changes.
+
+   - **`packages/frontend/src/App.tsx`** — Updated routes for `/customers` and `/customer-groups`. Uses `ROUTES` constants, `UnderDevelopmentPage` name per linter changes.
+
+   - **`packages/frontend/src/components/layout/Sidebar.tsx`** — Added "Customer Groups" nav item with `UsersRound` icon. Uses `ROUTES` constants per linter changes.
+
+   - **`packages/frontend/src/lib/client.ts`** — Moved from `api/client.ts`. Axios instance with `baseURL: '/api'`.
+
+   - **`packages/frontend/src/lib/queryClient.ts`** — New file. QueryClient with `refetchOnWindowFocus: false`, `refetchOnReconnect: true`, `staleTime: 5 minutes` per linter changes.
+
+   - **`packages/frontend/src/lib/cn.ts`** — Deleted (duplicate of `utils.ts`).
+
+   - **`packages/backend/src/swagger.ts`** — Current state has empty `apis: []` array, causing blank Swagger page:
+     ```typescript
+     import swaggerJsdoc from "swagger-jsdoc";
+     const options: swaggerJsdoc.Options = {
+       definition: {
+         openapi: "3.0.0",
+         info: {
+           title: "FOBOH Pricing API",
+           version: "1.0.0",
+           description: "Customer-specific pricing management for food and beverage suppliers",
+         },
+         servers: [{ url: "/api" }],
+       },
+       apis: [],
+     };
+     const swaggerSpec = swaggerJsdoc(options);
+     export default swaggerSpec;
+     ```
+
+   - **`packages/backend/src/server.ts`** — Serves Swagger UI at `/api-docs` endpoint.
+
+   - **Files introduced by linter/user** (not created by assistant, but referenced):
+     - `packages/frontend/src/lib/routes.ts` — `ROUTES` constants
+     - `packages/frontend/src/lib/queryKeys.ts` — `QUERY_KEYS` constants
+     - `packages/frontend/src/lib/apiEndpoints.ts` — `API_ENDPOINTS` constants
+     - `packages/backend/src/utilities/controllerWrapper.ts` — `wrapController` utility
+     - `packages/backend/src/utilities/findOrThrow.ts` — `findOrThrow` utility
+     - `packages/backend/src/constants/index.ts` — `PAGINATION`, `PROFILE_SCOPE`, `PROFILE_STATUS`, `ADJUSTMENT_TYPE`, `PERCENTAGE_DIVISOR`
+
+4. Errors and Fixes:
+   - **Prisma db push data loss**: Dropping `customer_name` column required `--accept-data-loss` flag. Fixed by running `npx prisma db push --accept-data-loss`.
+   - **TypeScript `req.params.id` type error**: `string | string[]` not assignable to `string` in customer and customerGroup controllers. Fixed by adding `as string` type assertions. Later replaced entirely by `wrapController` pattern (linter changes).
+   - **Duplicate `OR` key in object literal** (TS1117): In `resolvePrice` service, the draft profiles query had two `OR` keys in the same object. Fixed by wrapping both in an `AND` array:
+     ```typescript
+     AND: [
+       { OR: [/* customer targeting conditions */] },
+       { OR: [/* scope/product conditions */] },
+     ]
+     ```
+   - **Stale state bug in CustomerGroupsPage**: User reported that adding a member to a group didn't update the members list in the modal until page refresh. Root cause: `managingGroup` was stored as a `useState<CustomerGroup | null>` snapshot that didn't update when React Query cache refreshed. Fixed by storing only `managingGroupId` in state and deriving `managingGroup` from the live `groups` array:
+     ```typescript
+     const [managingGroupId, setManagingGroupId] = useState<string | null>(null);
+     const managingGroup = managingGroupId ? groups.find((g) => g.id === managingGroupId) ?? null : null;
+     ```
+
+5. Problem Solving:
+   - Successfully implemented the entire 8-step plan from schema to UI
+   - Resolved all TypeScript compilation errors in both backend and frontend
+   - Fixed the real-time UI update bug for group membership management
+   - Cleaned up duplicate utility files and reorganized file structure per user requests
+   - Currently investigating blank Swagger API documentation page
+
+6. All User Messages:
+   - "Implement the following plan: [detailed 8-step plan for Customers, Customer Groups & Specificity-Based Price Resolution]"
+   - "I have tested I found some issues first is when i tried to add customer in group. it is added but not update this section still showing No members in this group. but when i refresh then it reflects [screenshot]"
+   - "in frontend i have two file cn.ts and utils.ts which one is useless?"
+   - "ok change it and then delete cn.ts"
+   - "can you make packages/frontend/src/api/client.ts this client into lib because currently it is in api folder"
+   - "can you initialize query client in lib folder and import in App.tsx?"
+   - "refetchOnWindowFocus: false, by default"
+   - "my swagger api route is blank. I think not load properly. I have already backend endpoints please check and create"
+
+7. Pending Tasks:
+   - Create Swagger/OpenAPI documentation for all backend endpoints (the current task the user just asked about)
+
+8. Current Work:
+   The user reported that the Swagger API documentation page at `/api-docs` is blank. I investigated and found that `packages/backend/src/swagger.ts` has `apis: []` — an empty array meaning no endpoints are scanned for JSDoc annotations. I've already read:
+   - `swagger.ts` (the config with empty `apis`)
+   - `server.ts` (serves swagger at `/api-docs`)
+   - All policy files (to understand exact endpoint schemas)
+   - The main router (`controllers/index.ts`)
+   
+   The swagger dependencies are installed (`swagger-jsdoc` ^6.2.8, `swagger-ui-express` ^5.0.1). I need to write the OpenAPI spec directly in `swagger.ts` since the controllers use a `wrapController` utility pattern that doesn't have JSDoc swagger annotations.
+
+9. Optional Next Step:
+   Write the complete OpenAPI specification in `packages/backend/src/swagger.ts` covering all endpoints:
+   - Products: `GET /products`, `GET /products/:id/resolved-price`
+   - Customers: `POST /customers`, `GET /customers`, `GET /customers/:id`, `PUT /customers/:id`, `DELETE /customers/:id`
+   - Customer Groups: `POST /customer-groups`, `GET /customer-groups`, `GET /customer-groups/:id`, `PUT /customer-groups/:id`, `DELETE /customer-groups/:id`, `POST /customer-groups/:id/members`, `DELETE /customer-groups/:id/members/:customerId`
+   - Pricing Profiles: `POST /pricing-profiles`, `GET /pricing-profiles`, `GET /pricing-profiles/:id`, `PUT /pricing-profiles/:id`, `DELETE /pricing-profiles/:id`, `GET /pricing-profiles/check-name`
+   - Resolution: `GET /resolved-prices`, `GET /resolve-price`, `POST /preview-prices`
+   
+   User's exact quote: "my swagger api route is blank. I think not load properly. I have already backend endpoints please check and create"
+
+If you need specific details from before compaction (like exact code snippets, error messages, or content you generated), read the full transcript at: /Users/jasminthummar/.claude/projects/-Users-jasminthummar-Desktop-foboh/2db41729-42d1-4389-81d4-4cda28a310cd.jsonl
+Please continue the conversation from where we left off without asking the user any further questions. Continue with the last task that you were asked to work on.
+
+=== ASSISTANT ===
+I'll continue with creating the Swagger API documentation. Let me read the current controller and policy files to understand the exact endpoint signatures.
+
+=== ASSISTANT ===
+Now I have all the information needed. Let me also check the product controller to understand those endpoints.
+
+=== ASSISTANT ===
+Now I'll write the complete Swagger spec. Since the controllers use `wrapController` (not JSDoc annotations), I'll define the spec inline in `swagger.ts`.
+
+=== ASSISTANT ===
+Now I need to update `server.ts` since we no longer need the `swagger-jsdoc` package — we're exporting the spec directly as a plain object.
+
+=== ASSISTANT ===
+`server.ts` already imports and uses `swaggerSpec` correctly — it passes it to `swaggerUi.setup()`, which accepts a plain JSON object. No changes needed there.
+
+Let me verify the backend compiles with no issues.
+
+=== ASSISTANT ===
+Clean — no errors. Let me check if `swagger-jsdoc` is still imported anywhere (it shouldn't be since we replaced the file).
+
+=== ASSISTANT ===
+No references to `swagger-jsdoc` remain in the source. The Swagger documentation is now complete. 
+
+Here's what was done:
+
+**Problem:** `swagger.ts` used `swagger-jsdoc` with an empty `apis: []` array, so no endpoints were documented and the Swagger UI was blank.
+
+**Fix:** Replaced the file with a complete inline OpenAPI 3.0 spec covering all 20 endpoints:
+
+| Tag | Endpoints |
+|-----|-----------|
+| **Products** | `GET /products`, `GET /products/:id` |
+| **Customers** | `POST /customers`, `GET /customers`, `GET /customers/:id`, `PUT /customers/:id`, `DELETE /customers/:id` |
+| **Customer Groups** | `POST /customer-groups`, `GET /customer-groups`, `GET /customer-groups/:id`, `PUT /customer-groups/:id`, `DELETE /customer-groups/:id`, `POST /customer-groups/:id/members`, `DELETE /customer-groups/:id/members/:customerId` |
+| **Pricing Profiles** | `POST /pricing-profiles`, `GET /pricing-profiles`, `GET /pricing-profiles/:id`, `PUT /pricing-profiles/:id`, `DELETE /pricing-profiles/:id`, `GET /pricing-profiles/check-name` |
+| **Price Resolution** | `GET /products/:id/resolved-price`, `GET /resolved-prices`, `GET /resolve-price`, `POST /preview-prices` |
+
+All request/response schemas, parameters, and component schemas (Product, Customer, CustomerGroup, PricingProfile, ResolvedPrice, etc.) are defined. Restart the backend and visit `/api-docs` to see it.
+
+=== USER ===
+I have created the screen and api with divide customer tier wise 1 is highest and 6 is loweset. 6-Tier Specificity. can check how this will going to work this logic is fine which i have crated beacuse I have separate other way to decide pricing. in the future The supplier doesn't just create one rule. They create lots. Over time, a supplier might have 20, 50, 100 pricing profiles running at the same time. There is high posiblity to And the same customer can match multiple rules for example profile x: "10% off all wine for hotels"
+profile y: "$5 off Koyama wines for VIP customers" Now Now a hotel that is also a VIP customer orders a Koyama wine. Both rules apply. Which discount do they get?
+
+Rule 1 says: 10% off
+Rule 2 says: $5 off. It has to pick one. but my logic is that superier or I need to apply other one like Most expensive price wins so supplier can protect their margin , amoung them cheap price accept but there will risk of margins other side suppiler the supplier knows that naming a customer directly = guaranteed price
+
+=== ASSISTANT ===
+Great question - this is a critical business logic decision. Let me break down the scenario:
+
+**Current logic:** Tier (specificity) first, then `updatedAt DESC` as tiebreaker within the same tier.
+
+**The problem you're describing:**
+
+A customer belongs to **two groups** (Hotel + VIP). Two profiles both match at **Tier 4** (Group + All Products):
+- Profile X: "10% off for Hotels" → price = $22.50
+- Profile Y: "$5 off for VIPs" → price = $20.00
+
+Currently, whichever was updated most recently wins. That's arbitrary from a business perspective.
+
+**The two strategies:**
+
+| Strategy | Tiebreaker | Pro | Con |
+|----------|-----------|-----|-----|
+| **Highest price wins** | `newPrice DESC` | Protects supplier margin | Customer always gets the smaller discount |
+| **Lowest price wins** | `newPrice ASC` | Customer-friendly, competitive | Risk to margins |
+
+**Your instinct is right** - "highest price wins" makes sense for B2B suppliers because:
+1. If the supplier wants to guarantee a low price, they **name the customer directly** (Tier 1-2), which overrides everything
+2. Group-level discounts are general rules - when they conflict, protecting margin is safer
+3. The supplier can always create a more specific (lower-tier) profile to override
+
+So the hierarchy becomes:
+> **Specificity first** (tier 1 beats tier 4) → **Highest price wins** within same tier → supplier uses customer-specific profiles for guaranteed low prices
+
+Would you like me to update the `resolvePrice` logic to use "highest price wins" as the same-tier tiebreaker instead of "most recently updated"?
+
+=== USER ===
+is there any logic so we can attarct customers easily. or supplier margin will not affect more??
+
+=== ASSISTANT ===
+Good thinking. Here's the balanced approach that real B2B platforms use:
+
+## The 3 Options
+
+| Approach | Same-Tier Tiebreaker | Customer Impact | Margin Risk |
+|----------|---------------------|-----------------|-------------|
+| **Highest price** | `newPrice DESC` | Gets smallest discount | Zero risk, but less competitive |
+| **Lowest price** | `newPrice ASC` | Gets best discount | Can stack into deep discounts |
+| **Best price + floor** | `newPrice ASC` + minimum margin | Gets best discount, but never below floor | Protected by floor price |
+
+## Recommended: "Best Price + Floor Protection"
+
+The smartest approach - **give the customer the best (lowest) price, but never go below a floor**:
+
+```
+Customer in Hotel group + VIP group, orders Koyama ($25 base):
+  - Profile X: 10% off → $22.50
+  - Profile Y: $5 off  → $20.00
+  
+  Winner: $20.00 (best for customer = attracts them)
+  
+  BUT if supplier set minimum margin = 15% and cost = $18:
+  Floor price = $18 × 1.15 = $20.70
+  Final price = $20.70 (margin protected)
+```
+
+**Why this works:**
+1. Customers get the best deal → **attracts them**
+2. Supplier sets a **floor (minimum margin %)** per product → **margin never breaks**
+3. Customer-specific profiles (Tier 1-2) still override everything → supplier has **full control** for key accounts
+4. Supplier doesn't need to worry about conflicting group rules hurting them
+
+**What we'd need to add:**
+- `costPrice` and `minMarginPercent` fields on the Product model
+- Resolution logic: pick lowest price, but clamp to floor
+- A small UI field on products for cost price + margin %
+
+Want me to implement this "best price + floor protection" approach?
+
+=== USER ===
+Yes sure
+
+=== ASSISTANT ===
+Now let me read the frontend types and resolved prices page.
+
+=== ASSISTANT ===
+Now let me check the product service and policies for completeness.
+
+=== ASSISTANT ===
+Now I have a complete picture. Let me write the plan.
+
+=== ASSISTANT ===
+Now let me write the new plan.

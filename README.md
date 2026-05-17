@@ -93,3 +93,4 @@ I have taken help and used Claude to reach the final output. I have provided my 
 Extra:
 Tests: `npm run test -w packages/backend`
 API docs: `http://localhost:5000/api-docs`
+Development transcripts: `transcripts/` folder contains 6 session logs (`.txt`) covering project setup, pricing engine, tier resolution, waterfall UI, code review, and trade-off decisions.
