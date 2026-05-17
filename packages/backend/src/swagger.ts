@@ -111,41 +111,6 @@ const swaggerConfig = {
         }
       }
     },
-    '/products/{id}/resolved-price': {
-      get: {
-        tags: ['Price Resolution'],
-        summary: 'Resolve price for a specific product and customer',
-        parameters: [
-          {
-            name: 'id',
-            in: 'path',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'Product ID'
-          },
-          {
-            name: 'customerId',
-            in: 'query',
-            required: true,
-            schema: { type: 'string', format: 'uuid' },
-            description: 'Customer ID'
-          }
-        ],
-        responses: {
-          200: {
-            description: 'Resolved price with tier info',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: { data: { $ref: '#/components/schemas/ResolvedPrice' } }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     '/customers': {
       get: {
         tags: ['Customers'],
@@ -661,40 +626,6 @@ const swaggerConfig = {
                   properties: {
                     data: { type: 'array', items: { $ref: '#/components/schemas/ResolvedPrice' } }
                   }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    '/resolve-price': {
-      get: {
-        tags: ['Price Resolution'],
-        summary: 'Resolve price for a single product + customer',
-        description: 'Returns the winning price with full tier reasoning and price waterfall.',
-        parameters: [
-          {
-            name: 'customerId',
-            in: 'query',
-            required: true,
-            schema: { type: 'string', format: 'uuid' }
-          },
-          {
-            name: 'productId',
-            in: 'query',
-            required: true,
-            schema: { type: 'string', format: 'uuid' }
-          }
-        ],
-        responses: {
-          200: {
-            description: 'Resolved price with reasoning',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: { data: { $ref: '#/components/schemas/ResolvedPrice' } }
                 }
               }
             }

@@ -12,7 +12,7 @@ export type CreateCustomerGroupBody = z.infer<typeof createCustomerGroupPolicy.b
 
 export const updateCustomerGroupPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
   body: z.object({
     name: z.string().min(1).max(NAME_MAX_LENGTH).optional(),
@@ -24,13 +24,13 @@ export type UpdateCustomerGroupBody = z.infer<typeof updateCustomerGroupPolicy.b
 
 export const getCustomerGroupPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 
 export const deleteCustomerGroupPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 
@@ -42,16 +42,16 @@ export const listCustomerGroupsPolicy = {
 
 export const addMemberPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
   body: z.object({
-    customerId: z.string().uuid(),
+    customerId: z.uuid(),
   }),
 };
 
 export const removeMemberPolicy = {
   params: z.object({
-    id: z.string().uuid(),
-    customerId: z.string().uuid(),
+    id: z.uuid(),
+    customerId: z.uuid(),
   }),
 };

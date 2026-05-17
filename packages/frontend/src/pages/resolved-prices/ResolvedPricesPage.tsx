@@ -22,7 +22,7 @@ function ExpandedDetails({ price }: { price: ResolvedPrice }) {
       {price.tierLabel && (
         <p>
           <span className="rounded-pill bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
-            Tier {price.tier} -{price.tierLabel}
+            Tier {price.tier} - {price.tierLabel}
           </span>
         </p>
       )}
@@ -120,7 +120,7 @@ function ExpandedDetails({ price }: { price: ResolvedPrice }) {
                           T{w.tier}
                         </span>
                       ) : (
-                        <span className="text-ink-400">&mdash;</span>
+                        <span className="text-ink-400">-</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-right font-semibold text-ink-900 whitespace-nowrap">
@@ -132,7 +132,7 @@ function ExpandedDetails({ price }: { price: ResolvedPrice }) {
                           ${w.priceAfterFloor.toFixed(2)}
                         </span>
                       ) : (
-                        <span className="text-ink-400">&mdash;</span>
+                        <span className="text-ink-400">-</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">
@@ -383,7 +383,7 @@ export function ResolvedPricesPage() {
                                     {diff.toFixed(2)}
                                   </span>
                                 ) : (
-                                  <span className="text-ink-400">&mdash;</span>
+                                  <span className="text-ink-400">-</span>
                                 )}
                               </td>
                               <td className="px-4 py-4 text-right text-sm whitespace-nowrap">
@@ -399,7 +399,7 @@ export function ResolvedPricesPage() {
                                     {price.floorApplied && " (applied)"}
                                   </span>
                                 ) : (
-                                  <span className="text-ink-400">&mdash;</span>
+                                  <span className="text-ink-400">-</span>
                                 )}
                               </td>
                               <td className="px-4 py-4 text-sm">
@@ -419,7 +419,7 @@ export function ResolvedPricesPage() {
                                     Tier {price.tier}
                                   </span>
                                 ) : (
-                                  <span className="text-ink-400">&mdash;</span>
+                                  <span className="text-ink-400">-</span>
                                 )}
                               </td>
                             </tr>

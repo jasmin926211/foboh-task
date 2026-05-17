@@ -57,16 +57,3 @@ export const updateProduct = async (
   return updated;
 };
 
-export const softDeleteProduct = async (id: string) => {
-  logger.info('Entry: softDeleteProduct service');
-
-  await findOrThrow(prisma.product.findUnique({ where: { id } }), 'Product', id);
-
-  const updated = await prisma.product.update({
-    where: { id },
-    data: { deletedAt: new Date() }
-  });
-
-  logger.info('Exit: softDeleteProduct service -success');
-  return updated;
-};

@@ -12,7 +12,7 @@ export type CreateCustomerBody = z.infer<typeof createCustomerPolicy.body>;
 
 export const updateCustomerPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
   body: z.object({
     name: z.string().min(1).max(NAME_MAX_LENGTH).optional(),
@@ -24,13 +24,13 @@ export type UpdateCustomerBody = z.infer<typeof updateCustomerPolicy.body>;
 
 export const getCustomerPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 
 export const deleteCustomerPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 

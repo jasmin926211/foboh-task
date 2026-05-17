@@ -5,15 +5,15 @@ export const createProfilePolicy = {
   body: z
     .object({
       name: z.string().min(1).max(NAME_MAX_LENGTH),
-      customerId: z.string().uuid().optional(),
-      customerGroupId: z.string().uuid().optional(),
+      customerId: z.uuid().optional(),
+      customerGroupId: z.uuid().optional(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]),
       adjustmentDirection: z.enum(["increase", "decrease"]).optional(),
       adjustmentValue: z.number().positive().optional(),
       status: z.enum(["draft", "published"]).default("draft"),
       scope: z.enum(["all", "selected"]).default("selected"),
-      productIds: z.array(z.string().uuid()).optional(),
-      customPrices: z.record(z.string().uuid(), z.number().nonnegative()).optional(),
+      productIds: z.array(z.uuid()).optional(),
+      customPrices: z.record(z.uuid(), z.number().nonnegative()).optional(),
     })
     .refine(
       (data) => !(data.customerId && data.customerGroupId),
@@ -45,20 +45,20 @@ export type CreateProfileBody = z.infer<typeof createProfilePolicy.body>;
 
 export const updateProfilePolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
   body: z
     .object({
       name: z.string().min(1).max(NAME_MAX_LENGTH).optional(),
-      customerId: z.string().uuid().optional().nullable(),
-      customerGroupId: z.string().uuid().optional().nullable(),
+      customerId: z.uuid().optional().nullable(),
+      customerGroupId: z.uuid().optional().nullable(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]).optional(),
       adjustmentDirection: z.enum(["increase", "decrease"]).optional().nullable(),
       adjustmentValue: z.number().positive().optional().nullable(),
       status: z.enum(["draft", "published"]).optional(),
       scope: z.enum(["all", "selected"]).optional(),
-      productIds: z.array(z.string().uuid()).optional(),
-      customPrices: z.record(z.string().uuid(), z.number().nonnegative()).optional(),
+      productIds: z.array(z.uuid()).optional(),
+      customPrices: z.record(z.uuid(), z.number().nonnegative()).optional(),
     })
     .refine(
       (data) => !(data.customerId && data.customerGroupId),
@@ -74,13 +74,13 @@ export type UpdateProfileBody = z.infer<typeof updateProfilePolicy.body>;
 
 export const getProfilePolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 
 export const deleteProfilePolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 
@@ -95,35 +95,19 @@ export const listProfilesPolicy = {
 
 export const resolvedPricesPolicy = {
   query: z.object({
-    customerId: z.string().uuid(),
-  }),
-};
-
-export const resolvedPriceByProductPolicy = {
-  params: z.object({
-    id: z.string().uuid(),
-  }),
-  query: z.object({
-    customerId: z.string().uuid(),
-  }),
-};
-
-export const resolvePricePolicy = {
-  query: z.object({
-    customerId: z.string().uuid(),
-    productId: z.string().uuid(),
+    customerId: z.uuid(),
   }),
 };
 
 export const previewPricesPolicy = {
   body: z
     .object({
-      productIds: z.array(z.string().uuid()).optional(),
+      productIds: z.array(z.uuid()).optional(),
       adjustmentType: z.enum(["fixed", "dynamic", "custom"]),
       adjustmentDirection: z.enum(["increase", "decrease"]).optional(),
       adjustmentValue: z.number().positive().optional(),
       scope: z.enum(["all", "selected"]).default("selected"),
-      customPrices: z.record(z.string().uuid(), z.number().nonnegative()).optional(),
+      customPrices: z.record(z.uuid(), z.number().nonnegative()).optional(),
     })
     .refine(
       (data) => data.scope === "all" || (data.productIds && data.productIds.length > 0),

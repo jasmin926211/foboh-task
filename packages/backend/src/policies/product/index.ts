@@ -11,13 +11,13 @@ export const listProductsPolicy = {
 
 export const getProductPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
 };
 
 export const updateProductPolicy = {
   params: z.object({
-    id: z.string().uuid(),
+    id: z.uuid(),
   }),
   body: z.object({
     costPrice: z.number().nullable().optional(),

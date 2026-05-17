@@ -33,22 +33,8 @@ const deleteProfileController = wrapController('deleteProfileController', async 
   data: await profileServices.deleteProfile(req.params.id as string),
 }));
 
-export const resolvePriceController = wrapController('resolvePriceController', async (req) => ({
-  data: await profileServices.resolvePrice(
-    req.params.id as string,
-    req.query.customerId as string,
-  ),
-}));
-
 export const resolveAllPricesController = wrapController('resolveAllPricesController', async (req) => ({
   data: await profileServices.resolveAllPrices(req.query.customerId as string),
-}));
-
-export const resolveSinglePriceController = wrapController('resolveSinglePriceController', async (req) => ({
-  data: await profileServices.resolvePrice(
-    req.query.productId as string,
-    req.query.customerId as string,
-  ),
 }));
 
 export const previewPricesController = wrapController('previewPricesController', async (req) => ({
