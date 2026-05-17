@@ -18,8 +18,13 @@ const updateProductController = wrapController('updateProductController', async 
   data: await productServices.updateProduct(req.params.id as string, req.body),
 }));
 
+const deleteProductController = wrapController('deleteProductController', async (req) => ({
+  data: await productServices.deleteProduct(req.params.id as string),
+}));
+
 router.get('/', validateRequest(policies.listProductsPolicy), listProductsController);
 router.get('/:id', validateRequest(policies.getProductPolicy), getProductController);
 router.put('/:id', validateRequest(policies.updateProductPolicy), updateProductController);
+router.delete('/:id', validateRequest(policies.deleteProductPolicy), deleteProductController);
 
 export default router;

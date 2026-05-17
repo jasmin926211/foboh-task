@@ -24,3 +24,9 @@ export const updateProductPolicy = {
     minMarginPercent: z.number().min(0).max(100).nullable().optional(),
   }),
 };
+
+export const deleteProductPolicy = {
+  params: z.object({
+    id: z.uuid(),
+  }),
+};

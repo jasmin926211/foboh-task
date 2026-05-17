@@ -109,6 +109,28 @@ const swaggerConfig = {
           },
           404: { description: 'Product not found' }
         }
+      },
+      delete: {
+        tags: ['Products'],
+        summary: 'Soft-delete a product',
+        description: 'Sets deletedAt and removes all profileProduct junction rows so pricing profiles no longer reference it.',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }
+        ],
+        responses: {
+          200: {
+            description: 'Product soft-deleted',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: { $ref: '#/components/schemas/Product' } }
+                }
+              }
+            }
+          },
+          404: { description: 'Product not found' }
+        }
       }
     },
     '/customers': {

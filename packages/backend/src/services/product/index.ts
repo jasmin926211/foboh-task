@@ -57,3 +57,22 @@ export const updateProduct = async (
   return updated;
 };
 
+export const deleteProduct = async (id: string) => {
+  logger.info('Entry: deleteProduct service');
+
+  await findOrThrow(prisma.product.findUnique({ where: { id, deletedAt: null } }), 'Product', id);
+
+  const [deleted] = await prisma.$transaction([
+    prisma.product.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    }),
+    prisma.profileProduct.deleteMany({
+      where: { productId: id },
+    }),
+  ]);
+
+  logger.info('Exit: deleteProduct service -success');
+  return deleted;
+};
+
