@@ -116,9 +116,9 @@ export function CustomerGroupsPage() {
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="rounded-card bg-surface-panel p-8">
+    <div className="rounded-card bg-surface-panel p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
           <h1 className="text-lg font-semibold text-ink-900">Customer Groups</h1>
           <p className="mt-1 text-[13px] text-ink-500">Organize customers into groups for bulk pricing</p>
@@ -129,7 +129,7 @@ export function CustomerGroupsPage() {
       </div>
 
       {/* Search */}
-      <div className="mb-6 max-w-sm">
+      <div className="mb-6 sm:max-w-sm">
         <TextInput placeholder="Search groups..." value={searchFilter} onChange={setSearchFilter} />
       </div>
 
@@ -155,33 +155,77 @@ export function CustomerGroupsPage() {
             </PillButton>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-surface-border">
-                <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Name</th>
-                <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Description</th>
-                <th className="px-6 py-3 text-center text-[13px] font-medium text-ink-500">Members</th>
-                <th className="px-6 py-3 text-left text-[13px] font-medium text-ink-500">Created</th>
-                <th className="px-6 py-3 text-right text-[13px] font-medium text-ink-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Desktop table */}
+            <div className="hidden lg:block overflow-x-auto">
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-surface-border">
+                    <th className="px-4 py-3 text-left text-[13px] font-medium text-ink-500">Name</th>
+                    <th className="px-4 py-3 text-left text-[13px] font-medium text-ink-500">Description</th>
+                    <th className="px-4 py-3 text-center text-[13px] font-medium text-ink-500">Members</th>
+                    <th className="px-4 py-3 text-left text-[13px] font-medium text-ink-500 whitespace-nowrap">Created</th>
+                    <th className="px-4 py-3 text-right text-[13px] font-medium text-ink-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {groups.map((group: CustomerGroup) => (
+                    <tr key={group.id} className="border-b border-surface-border-soft last:border-b-0 hover:bg-surface-panel/50">
+                      <td className="px-4 py-4 text-sm font-medium text-ink-900">{group.name}</td>
+                      <td className="px-4 py-4 text-sm text-ink-700">{group.description || '—'}</td>
+                      <td className="px-4 py-4 text-center text-sm text-ink-700">
+                        {group._count?.memberships ?? group.memberships?.length ?? 0}
+                      </td>
+                      <td className="px-4 py-4 text-sm text-ink-500 whitespace-nowrap">
+                        {new Date(group.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => setManagingGroupId(group.id)}
+                            className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100"
+                            title="Manage Members"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                            Members
+                          </button>
+                          <button
+                            onClick={() => openEditModal(group)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-surface-panel hover:text-ink-900"
+                            title="Edit"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(group)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-red-50 hover:text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="lg:hidden divide-y divide-surface-border-soft">
               {groups.map((group: CustomerGroup) => (
-                <tr key={group.id} className="border-b border-surface-border-soft last:border-b-0 hover:bg-surface-panel/50">
-                  <td className="px-6 py-4 text-sm font-medium text-ink-900">{group.name}</td>
-                  <td className="px-6 py-4 text-sm text-ink-700">{group.description || '—'}</td>
-                  <td className="px-6 py-4 text-center text-sm text-ink-700">
-                    {group._count?.memberships ?? group.memberships?.length ?? 0}
-                  </td>
-                  <td className="px-6 py-4 text-sm text-ink-500">
-                    {new Date(group.createdAt).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-end gap-2">
+                <div key={group.id} className="p-4 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-medium text-ink-900">{group.name}</h3>
+                      {group.description && (
+                        <p className="mt-0.5 text-xs text-ink-500 line-clamp-2">{group.description}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={() => setManagingGroupId(group.id)}
                         className="flex h-8 items-center gap-1 rounded-lg px-2 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100"
-                        title="Manage Members"
                       >
                         <UserPlus className="h-3.5 w-3.5" />
                         Members
@@ -189,30 +233,34 @@ export function CustomerGroupsPage() {
                       <button
                         onClick={() => openEditModal(group)}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-surface-panel hover:text-ink-900"
-                        title="Edit"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(group)}
                         className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-500 hover:bg-red-50 hover:text-red-600"
-                        title="Delete"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs text-ink-500">
+                    <span className="rounded-pill bg-purple-50 px-2 py-0.5 font-medium text-purple-700">
+                      {group._count?.memberships ?? group.memberships?.length ?? 0} members
+                    </span>
+                    <span>{new Date(group.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 
       {/* Create/Edit Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md rounded-card bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+          <div className="w-full max-w-md rounded-t-2xl sm:rounded-card bg-white p-4 sm:p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-ink-900">
                 {editingGroup ? 'Edit Group' : 'Add Customer Group'}
@@ -255,8 +303,8 @@ export function CustomerGroupsPage() {
 
       {/* Manage Members Modal */}
       {managingGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-lg rounded-card bg-white p-6 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-t-2xl sm:rounded-card bg-white p-4 sm:p-6 shadow-xl max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-ink-900">
                 Members of "{managingGroup.name}"

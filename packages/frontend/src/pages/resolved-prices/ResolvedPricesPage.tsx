@@ -73,7 +73,7 @@ function ExpandedDetails({ price }: { price: ResolvedPrice }) {
           </p>
 
           {/* Desktop waterfall table */}
-          <div className="hidden md:block overflow-x-auto rounded-lg border border-surface-border-soft">
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-surface-border-soft">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-surface-border bg-gray-100/60">
@@ -148,7 +148,7 @@ function ExpandedDetails({ price }: { price: ResolvedPrice }) {
           </div>
 
           {/* Mobile waterfall cards */}
-          <div className="md:hidden space-y-2">
+          <div className="lg:hidden space-y-2">
             {price.waterfall.map((w: WaterfallEntry) => (
               <div
                 key={w.profileId}
