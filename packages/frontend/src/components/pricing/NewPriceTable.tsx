@@ -21,7 +21,7 @@ export function NewPriceTable({
   const formatAdjustment = (value: number) => {
     const sign = adjustmentDirection === 'increase' ? '+' : '-';
     if (adjustmentType === 'dynamic') {
-      return `${sign} ${Math.abs(value).toFixed(2)}%`;
+      return `${sign} $${Math.abs(value).toFixed(2)}`;
     }
     return `${sign}$ ${Math.abs(value).toFixed(2)}`;
   };
