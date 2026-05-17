@@ -1,20 +1,13 @@
-# FOBOH Pricing Profile Challenge
-
-A fullstack app where food & beverage suppliers create customer-specific pricing profiles, assign them to products, and resolve the final price when multiple profiles overlap.
-
-**Stack:** React 19 + Vite + Tailwind + shadcn/ui | Node.js + Express + Prisma + PostgreSQL (Neon) | TypeScript end-to-end
-
----
-
-## Setup
+## Setup to run project
 
 ```bash
 git clone https://github.com/jasmin926211/foboh-task.git
 cd foboh-task
+git checkout development
 npm install
 ```
 
-Create `packages/backend/.env`:
+create one .env file in the `packages/backend/.env`
 
 ```env
 DATABASE_URL="postgresql://user:password@host/database?sslmode=require"
@@ -23,13 +16,8 @@ DATABASE_URL="postgresql://user:password@host/database?sslmode=require"
 Then run:
 
 ```bash
-npm run db:migrate        # run Prisma migrations
-npm run db:seed           # seed products + demo profiles
-npm run dev               # starts backend (:5000) + frontend (:3000)
+npm run dev               # backend port is (:5000) and frontend port is (:3000)
 ```
-
-Tests: `npm run test -w packages/backend`
-API docs: `http://localhost:5000/api-docs`
 
 ---
 
@@ -95,3 +83,7 @@ This gives the supplier full transparency into _why_ each product costs what it 
 **The N+1 in `resolveAllPrices` is the main scaling concern.** Each product issues a separate `resolvePrice` call with its own DB queries. For 5 products in the demo, this is fine. At hundreds of products, I'd refactor to fetch all applicable profiles in one query, then resolve in-memory -a single pass instead of N round-trips. I left it as-is because the per-product approach is easier to read and test, and optimizing it wasn't worth the complexity for this scope.
 
 **What I'd build next:** Expanded test coverage for the resolution logic (edge cases: no profiles, all drafts, multi-group overlaps, floor clamping), Redis caching of resolved prices with invalidation on profile changes, JWT auth with role-based access, and profile expiry dates so promos auto-deactivate. The margin divergence threshold (currently 10%) should also be supplier-configurable rather than hardcoded.
+
+Extra:
+Tests: `npm run test -w packages/backend`
+API docs: `http://localhost:5000/api-docs`
