@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FOBOH Pricing - Business Impact</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0a;
+      color: #e4e4e7;
+      overflow-x: hidden;
+    }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 64px 24px 48px;
+      background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.12) 0%, transparent 70%);
+    }
+    .hero-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      color: #60a5fa;
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.25);
+      padding: 4px 14px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: 2.6rem;
+      font-weight: 800;
+      color: #fafafa;
+      line-height: 1.15;
+      margin-bottom: 12px;
+    }
+    .hero h1 span { color: #4ade80; }
+    .hero p { font-size: 1.05rem; color: #a1a1aa; max-width: 520px; margin: 0 auto; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Big Number Row */
+    .big-numbers {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      margin: 48px 0;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .big-num {
+      background: #18181b;
+      padding: 36px 24px;
+      text-align: center;
+    }
+    .big-num .value {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .big-num .value.green { color: #4ade80; }
+    .big-num .value.red { color: #f87171; }
+    .big-num .value.blue { color: #60a5fa; }
+    .big-num .label { font-size: 0.85rem; color: #71717a; }
+
+    /* Section */
+    .section { margin-bottom: 56px; }
+    .section-label {
+      font-size: 0.7rem;
+      color: #3b82f6;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      margin-bottom: 8px;
+    }
+    .section-heading {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fafafa;
+      margin-bottom: 32px;
+    }
+
+    /* Before/After Flow */
+    .flow {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 0;
+      align-items: stretch;
+      margin-bottom: 40px;
+    }
+    .flow-col {
+      background: #18181b;
+      border-radius: 16px;
+      padding: 32px 28px;
+    }
+    .flow-col h3 {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .flow-col.before h3 { color: #f87171; }
+    .flow-col.after h3 { color: #4ade80; }
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 16px;
+      font-size: 2rem;
+      color: #3f3f46;
+    }
+    .flow-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .flow-item:last-child { margin-bottom: 0; }
+    .flow-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .before .flow-icon { background: rgba(248,113,113,0.12); }
+    .after .flow-icon { background: rgba(74,222,128,0.12); }
+    .flow-item h4 { font-size: 0.9rem; color: #e4e4e7; margin-bottom: 4px; }
+    .flow-item p { font-size: 0.8rem; color: #71717a; line-height: 1.45; }
+
+    /* Real Example */
+    .example-card {
+      background: #18181b;
+      border-radius: 16px;
+      padding: 36px;
+      border: 1px solid #27272a;
+      margin-bottom: 40px;
+    }
+    .example-card h3 {
+      font-size: 1.1rem;
+      color: #fafafa;
+      margin-bottom: 6px;
+    }
+    .example-card .subtitle {
+      font-size: 0.85rem;
+      color: #71717a;
+      margin-bottom: 24px;
+    }
+    .example-steps {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 24px;
+    }
+    .example-step {
+      flex: 1;
+      background: #0a0a0a;
+      padding: 20px 16px;
+      border-radius: 12px;
+      text-align: center;
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(59,130,246,0.15);
+      color: #60a5fa;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .example-step h4 {
+      font-size: 0.8rem;
+      color: #a1a1aa;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .example-step .price {
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+    .price.base { color: #a1a1aa; }
+    .price.compete { color: #fbbf24; }
+    .price.win { color: #4ade80; }
+    .price.floor { color: #f87171; }
+    .example-result {
+      background: rgba(74,222,128,0.06);
+      border: 1px solid rgba(74,222,128,0.15);
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .result-icon {
+      font-size: 1.4rem;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(74,222,128,0.1);
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .result-text { font-size: 0.85rem; color: #a1a1aa; line-height: 1.5; }
+    .result-text strong { color: #4ade80; }
+
+    /* Charts Grid */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .chart-card {
+      background: #18181b;
+      border-radius: 16px;
+      padding: 28px;
+      border: 1px solid #27272a;
+    }
+    .chart-card.wide { grid-column: 1 / -1; }
+    .chart-card h3 {
+      font-size: 0.9rem;
+      color: #a1a1aa;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    .chart-card .chart-subtitle {
+      font-size: 0.75rem;
+      color: #52525b;
+      margin-bottom: 20px;
+    }
+    .chart-wrap { position: relative; height: 260px; }
+    .chart-card.wide .chart-wrap { height: 280px; }
+
+    /* Feature Highlight */
+    .features {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+    .feature {
+      background: #18181b;
+      border-radius: 14px;
+      padding: 24px;
+      border: 1px solid #27272a;
+      transition: border-color 0.2s;
+    }
+    .feature:hover { border-color: #3f3f46; }
+    .feature-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .feature-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .feature h4 { font-size: 0.95rem; color: #fafafa; font-weight: 600; }
+    .feature p { font-size: 0.82rem; color: #71717a; line-height: 1.55; }
+    .feature .saved {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 0.75rem;
+      color: #4ade80;
+      background: rgba(74,222,128,0.08);
+      padding: 3px 10px;
+      border-radius: 6px;
+    }
+
+    .footer {
+      text-align: center;
+      padding: 40px 24px;
+      color: #3f3f46;
+      font-size: 0.8rem;
+      border-top: 1px solid #18181b;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 1.8rem; }
+      .big-numbers { grid-template-columns: 1fr; }
+      .flow { grid-template-columns: 1fr; }
+      .flow-arrow { transform: rotate(90deg); padding: 12px 0; }
+      .example-steps { flex-direction: column; }
+      .charts-grid, .features { grid-template-columns: 1fr; }
+      .chart-card.wide { grid-column: 1; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="hero-badge">Year 1 Impact Analysis</div>
+    <h1>How This System Saves<br/><span>$60,000 / Year</span></h1>
+    <p>A mid-size wine supplier ($2M revenue) using our tier-based pricing engine instead of spreadsheets</p>
+  </div>
+
+  <div class="container">
+
+    <!-- Big Numbers -->
+    <div class="big-numbers">
+      <div class="big-num">
+        <div class="value green">28% &rarr; 32%</div>
+        <div class="label">Gross margin improvement</div>
+      </div>
+      <div class="big-num">
+        <div class="value red">5.5% &rarr; 0%</div>
+        <div class="label">Below-cost sales eliminated</div>
+      </div>
+      <div class="big-num">
+        <div class="value blue">75% less</div>
+        <div class="label">Time spent managing prices</div>
+      </div>
+    </div>
+
+    <!-- Before / After -->
+    <div class="section">
+      <div class="section-label">The Problem vs The Solution</div>
+      <div class="section-heading">What changes for the supplier?</div>
+      <div class="flow">
+        <div class="flow-col before">
+          <h3><span style="font-size:1.2rem">&#x26A0;</span> Before (Spreadsheets)</h3>
+          <div class="flow-item">
+            <div class="flow-icon">&#x1F4B8;</div>
+            <div>
+              <h4>Selling below cost</h4>
+              <p>30% off on a $120 wine with $85 cost = $84. Nobody catches it for months.</p>
+            </div>
+          </div>
+          <div class="flow-item">
+            <div class="flow-icon">&#x1F500;</div>
+            <div>
+              <h4>Deals override each other</h4>
+              <p>A "10% off VIPs" promo silently undercuts a $95 deal negotiated directly with Bondi Cellars.</p>
+            </div>
+          </div>
+          <div class="flow-item">
+            <div class="flow-icon">&#x2753;</div>
+            <div>
+              <h4>"Why am I paying this?"</h4>
+              <p>Customer calls, nobody can explain the price. Rep gives an unnecessary extra 5% off.</p>
+            </div>
+          </div>
+          <div class="flow-item">
+            <div class="flow-icon">&#x23F3;</div>
+            <div>
+              <h4>6+ hours/week on pricing</h4>
+              <p>Manually updating price lists per customer in spreadsheets every time something changes.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="flow-arrow">&rarr;</div>
+
+        <div class="flow-col after">
+          <h3><span style="font-size:1.2rem">&#x2705;</span> After (This System)</h3>
+          <div class="flow-item">
+            <div class="flow-icon">&#x1F6E1;</div>
+            <div>
+              <h4>Floor price protection</h4>
+              <p>System auto-calculates: cost $85 + 15% margin = floor $97.75. No price goes below it. Ever.</p>
+            </div>
+          </div>
+          <div class="flow-item">
+            <div class="flow-icon">&#x1F3AF;</div>
+            <div>
+              <h4>Most specific deal always wins</h4>
+              <p>Bondi's $95 deal (Tier 1) beats group promos (Tier 3-4). Negotiated prices are protected.</p>
+            </div>
+          </div>
+          <div class="flow-item">
+            <div class="flow-icon">&#x1F4CA;</div>
+            <div>
+              <h4>Full waterfall audit</h4>
+              <p>One click shows every profile considered, who won, who lost, and exactly why.</p>
+            </div>
+          </div>
+          <div class="flow-item">
+            <div class="flow-icon">&#x26A1;</div>
+            <div>
+              <h4>1.5 hours/week</h4>
+              <p>Set group profiles once. New products and customers auto-apply. No manual updates.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Real Example Walkthrough -->
+    <div class="section">
+      <div class="section-label">Real Example</div>
+      <div class="section-heading">How a price gets resolved</div>
+      <div class="example-card">
+        <h3>Bondi Cellars orders Koyama Methode Brut ($120 base)</h3>
+        <div class="subtitle">Bondi is in "VIP" and "Independent Retailers" groups. Three pricing profiles match this product.</div>
+        <div class="example-steps">
+          <div class="example-step">
+            <div class="step-num">1</div>
+            <h4>Base Price</h4>
+            <div class="price base">$120.00</div>
+            <p style="font-size:0.72rem;color:#52525b;margin-top:6px">Catalog price</p>
+          </div>
+          <div class="example-step">
+            <div class="step-num">2</div>
+            <h4>3 Profiles Compete</h4>
+            <div class="price compete">$95 / $105 / $108</div>
+            <p style="font-size:0.72rem;color:#52525b;margin-top:6px">Tier 1 &bull; Tier 3 &bull; Tier 4</p>
+          </div>
+          <div class="example-step">
+            <div class="step-num">3</div>
+            <h4>Most Specific Wins</h4>
+            <div class="price win">$95.00</div>
+            <p style="font-size:0.72rem;color:#52525b;margin-top:6px">Tier 1: Customer + Selected</p>
+          </div>
+          <div class="example-step">
+            <div class="step-num">4</div>
+            <h4>Floor Check</h4>
+            <div class="price win">$95.00 &#x2713;</div>
+            <p style="font-size:0.72rem;color:#52525b;margin-top:6px">Above floor ($85 cost)</p>
+          </div>
+        </div>
+        <div class="example-result">
+          <div class="result-icon">&#x2705;</div>
+          <div class="result-text">
+            <strong>Final price: $95.00</strong> &mdash; Bondi's direct deal wins. The VIP
+            discount ($105) and Indie Retailers discount ($108) are logged in the waterfall
+            as "lost" but never override the more specific Tier 1 price.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="section">
+      <div class="section-label">The Numbers</div>
+      <div class="section-heading">Year 1 impact visualized</div>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3>Margin Before vs After</h3>
+          <div class="chart-subtitle">Gross margin % and below-cost sales %</div>
+          <div class="chart-wrap"><canvas id="marginChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>Where the $60K Comes From</h3>
+          <div class="chart-subtitle">Annual savings by system feature</div>
+          <div class="chart-wrap"><canvas id="savingsChart"></canvas></div>
+        </div>
+        <div class="chart-card wide">
+          <h3>Cumulative Revenue Saved Over 12 Months</h3>
+          <div class="chart-subtitle">Money that would have been lost to below-cost sales, override errors, and stale pricing</div>
+          <div class="chart-wrap"><canvas id="leakageChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Features that drive savings -->
+    <div class="section">
+      <div class="section-label">System Features</div>
+      <div class="section-heading">What protects the margin</div>
+      <div class="features">
+        <div class="feature">
+          <div class="feature-head">
+            <div class="feature-dot" style="background:#4ade80"></div>
+            <h4>Floor Price Protection</h4>
+          </div>
+          <p>Every product can have a cost price and minimum margin %. The system calculates a floor and clamps any price that drops below it. No discount can ever sell below cost.</p>
+          <div class="saved">Saves ~$25,000/year</div>
+        </div>
+        <div class="feature">
+          <div class="feature-head">
+            <div class="feature-dot" style="background:#3b82f6"></div>
+            <h4>6-Tier Specificity</h4>
+          </div>
+          <p>Customer deals always beat group promos, group promos beat global offers. A direct negotiation is never silently overridden. Retains key customer relationships.</p>
+          <div class="saved">Saves ~$15,000/year</div>
+        </div>
+        <div class="feature">
+          <div class="feature-head">
+            <div class="feature-dot" style="background:#fbbf24"></div>
+            <h4>Waterfall Audit Trail</h4>
+          </div>
+          <p>Every price resolution shows which profiles were considered, who won, who lost, and why. Disputes drop from 12/month to 2. No more unnecessary "make them happy" discounts.</p>
+          <div class="saved">Saves ~$10,000/year</div>
+        </div>
+        <div class="feature">
+          <div class="feature-head">
+            <div class="feature-dot" style="background:#22d3ee"></div>
+            <h4>Margin Insight Alerts</h4>
+          </div>
+          <p>When a winning price diverges more than 10% from same-tier average, the system flags it. Catches stale custom prices before they accumulate into invisible losses.</p>
+          <div class="saved">Saves ~$8,000/year</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer">FOBOH Pricing Profile Challenge &mdash; Business Impact Analysis</div>
+
+  <script>
+    const C = {
+      red: '#f87171', redBg: 'rgba(248,113,113,0.15)',
+      green: '#4ade80', greenBg: 'rgba(74,222,128,0.15)',
+      blue: '#3b82f6', amber: '#fbbf24', cyan: '#22d3ee',
+    };
+    Chart.defaults.color = '#71717a';
+    Chart.defaults.borderColor = '#27272a';
+    Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+
+    // Margin Chart
+    new Chart(document.getElementById('marginChart'), {
+      type: 'bar',
+      data: {
+        labels: ['Gross Margin', 'Below-Cost Sales'],
+        datasets: [
+          { label: 'Before', data: [28, 5.5], backgroundColor: 'rgba(248,113,113,0.25)', borderColor: C.red, borderWidth: 2, borderRadius: 8 },
+          { label: 'After', data: [32, 0.2], backgroundColor: 'rgba(74,222,128,0.25)', borderColor: C.green, borderWidth: 2, borderRadius: 8 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { boxWidth: 12, padding: 16 } } },
+        scales: { y: { beginAtZero: true, max: 40, ticks: { callback: v => v + '%' } } },
+      },
+    });
+
+    // Savings Doughnut
+    new Chart(document.getElementById('savingsChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Floor Protection ($25k)', 'Tier Hierarchy ($15k)', 'Waterfall Audit ($10k)', 'Margin Insight ($8k)', 'Time Saved ($2k)'],
+        datasets: [{
+          data: [25000, 15000, 10000, 8000, 2000],
+          backgroundColor: [C.green, C.blue, C.amber, C.cyan, '#a78bfa'],
+          borderColor: '#18181b', borderWidth: 3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '55%',
+        plugins: {
+          legend: { position: 'right', labels: { padding: 10, font: { size: 11 }, boxWidth: 12 } },
+          tooltip: { callbacks: { label: ctx => ' $' + ctx.parsed.toLocaleString() } },
+        },
+      },
+    });
+
+    // Leakage Line
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    new Chart(document.getElementById('leakageChart'), {
+      type: 'line',
+      data: {
+        labels: months,
+        datasets: [
+          {
+            label: 'Without this system',
+            data: months.map((_, i) => (i + 1) * 5000),
+            borderColor: C.red, backgroundColor: C.redBg,
+            fill: true, tension: 0.35, pointRadius: 5, pointBackgroundColor: C.red,
+          },
+          {
+            label: 'With this system',
+            data: months.map((_, i) => (i + 1) * 200),
+            borderColor: C.green, backgroundColor: C.greenBg,
+            fill: true, tension: 0.35, pointRadius: 5, pointBackgroundColor: C.green,
+          },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top', labels: { boxWidth: 12, padding: 16 } },
+          tooltip: { callbacks: { label: ctx => ' $' + ctx.parsed.y.toLocaleString() + ' lost' } },
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'k' } },
+        },
+      },
+    });
+  </script>
+</body>
+</html>

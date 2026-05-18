@@ -7,3 +7,4 @@ dist/
 .prisma/
 packages/backend/prisma/*.db
 docs
+business-impact-analysis.txt
